@@ -26,10 +26,12 @@ interface GameBlock {
 }
 
 const SHEETS = {
-  palpites: "bolao - palpites",
-  pagamento: "bolao - pagamento",
-  ranking: "ranking"
+  palpites: ["bolao - palpites", "bolao palpites", "palpites"],
+  pagamento: ["bolao - pagamento", "bolao pagamento", "pagamento", "pagamentos"],
+  ranking: ["ranking"]
 };
+
+const DEFAULT_YEAR = 2026;
 
 const TEAM_NAMES: Record<string, string> = {
   AFS: "África do Sul",
@@ -95,9 +97,20 @@ function isDate(cell: ExcelCell): cell is Date {
 }
 
 function formatDateCell(cell: ExcelCell): string | null {
-  if (!isDate(cell)) return null;
-  if (cell.getUTCFullYear() < 1900) return null;
-  return `${cell.getUTCFullYear()}-${String(cell.getUTCMonth() + 1).padStart(2, "0")}-${String(cell.getUTCDate()).padStart(2, "0")}`;
+  if (isDate(cell)) {
+    if (cell.getUTCFullYear() < 1900) return null;
+    return `${cell.getUTCFullYear()}-${String(cell.getUTCMonth() + 1).padStart(2, "0")}-${String(cell.getUTCDate()).padStart(2, "0")}`;
+  }
+
+  const value = text(cell);
+  const brDate = value.match(/^(\d{1,2})\/(\d{1,2})(?:\/(\d{2,4}))?$/);
+  if (brDate) {
+    const year = brDate[3] ? normalizeYear(brDate[3]) : DEFAULT_YEAR;
+    return `${year}-${String(brDate[2]).padStart(2, "0")}-${String(brDate[1]).padStart(2, "0")}`;
+  }
+
+  const isoDate = value.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  return isoDate ? `${isoDate[1]}-${isoDate[2]}-${isoDate[3]}` : null;
 }
 
 function formatTimeCell(cell: ExcelCell): string {
@@ -114,7 +127,7 @@ function parseDay(cell: ExcelCell): ParsedDay | null {
   const match = value.match(/DIA\s+(\d+)\s*-\s*(\d{1,2})\/(\d{1,2})/i);
   if (!match) return null;
   const day = match[1];
-  const date = `2026-${String(match[3]).padStart(2, "0")}-${String(match[2]).padStart(2, "0")}`;
+  const date = `${DEFAULT_YEAR}-${String(match[3]).padStart(2, "0")}-${String(match[2]).padStart(2, "0")}`;
   return { label: `Dia ${day}`, date };
 }
 
@@ -124,11 +137,13 @@ function parseScore(value: ExcelCell | string | null | undefined): string | null
 }
 
 function isGameAbbreviation(cell: ExcelCell): boolean {
-  return /^[A-ZÀ-ÜÃÕÇ]{2,4}\s*x\s*[A-ZÀ-ÜÃÕÇ]{2,4}$/i.test(text(cell));
+  return /^[\p{L}]{2,5}\s*x\s*[\p{L}]{2,5}$/iu.test(text(cell));
 }
 
 function splitGame(abreviacao: string): { mandante: string; visitante: string } {
-  const [homeRaw, awayRaw] = abreviacao.split(/\s*x\s*/i);
+  const match = abreviacao.match(/^([\p{L}]{2,5})\s*(?:x|-)\s*([\p{L}]{2,5})$/iu);
+  const homeRaw = match?.[1] ?? abreviacao;
+  const awayRaw = match?.[2] ?? "";
   const home = homeRaw.toUpperCase();
   const away = awayRaw.toUpperCase();
   return {
@@ -141,6 +156,11 @@ function slug(value: string): string {
   return normalizarTexto(value)
     .replace(/[^a-z0-9]+/g, "-")
     .replace(/^-+|-+$/g, "");
+}
+
+function normalizeYear(year: string): number {
+  const numeric = Number(year);
+  return numeric < 100 ? 2000 + numeric : numeric;
 }
 
 function isParticipantName(value: string): boolean {
@@ -158,8 +178,39 @@ function parsePointCravadas(value: ExcelCell): { pontos: number; cravadas: numbe
   return { pontos: Number.isFinite(number) ? number : 0, cravadas: 0 };
 }
 
-function findSheet(sheets: ExcelSheet[], expected: string): ExcelSheet | null {
-  return sheets.find((sheet) => normalizarTexto(sheet.sheet) === expected) ?? null;
+function toNumber(value: ExcelCell): number {
+  if (typeof value === "number") return value;
+  const parsed = Number(text(value).replace(",", ".").replace(/[^\d.-]/g, ""));
+  return Number.isFinite(parsed) ? parsed : 0;
+}
+
+function sheetKey(value: string): string {
+  return normalizarTexto(value).replace(/[^a-z0-9]+/g, " ").trim();
+}
+
+function findSheet(sheets: ExcelSheet[], expected: readonly string[]): ExcelSheet | null {
+  const aliases = expected.map(sheetKey);
+  return sheets.find((sheet) => aliases.includes(sheetKey(sheet.sheet))) ?? null;
+}
+
+function findBlockHeaderRow(rows: ExcelCell[][], dayCell: { row: number; col: number }): number {
+  let bestRow = dayCell.row;
+  let bestScore = 0;
+
+  for (let rowIndex = dayCell.row; rowIndex < Math.min(rows.length, dayCell.row + 4); rowIndex += 1) {
+    const row = rows[rowIndex] ?? [];
+    const hasParticipantHeader = normalizarTexto(text(row[dayCell.col])).includes("participante") ? 2 : 0;
+    const gameCount = row.slice(dayCell.col + 1).filter(isGameAbbreviation).length;
+    const hasTotal = row.some((cell, colIndex) => colIndex > dayCell.col && normalizarTexto(text(cell)) === "total") ? 1 : 0;
+    const score = hasParticipantHeader + gameCount * 2 + hasTotal;
+
+    if (score > bestScore) {
+      bestScore = score;
+      bestRow = rowIndex;
+    }
+  }
+
+  return bestRow;
 }
 
 function findDayBlocks(rows: ExcelCell[][]): GameBlock[] {
@@ -174,9 +225,10 @@ function findDayBlocks(rows: ExcelCell[][]): GameBlock[] {
 
   return dayCells
     .map((dayCell) => {
-      const header = rows[dayCell.row] ?? [];
+      const headerRow = findBlockHeaderRow(rows, dayCell);
+      const header = rows[headerRow] ?? [];
       const gameCols: number[] = [];
-      let totalCol = dayCell.col + 1;
+      let totalCol = -1;
 
       for (let col = dayCell.col + 1; col < header.length; col += 1) {
         const value = normalizarTexto(text(header[col]));
@@ -187,6 +239,10 @@ function findDayBlocks(rows: ExcelCell[][]): GameBlock[] {
         if (isGameAbbreviation(header[col])) gameCols.push(col);
       }
 
+      if (totalCol < 0 && gameCols.length > 0) {
+        totalCol = Math.max(...gameCols) + 1;
+      }
+
       const nextHeaderRow =
         dayCells
           .filter((item) => item.col === dayCell.col && item.row > dayCell.row)
@@ -194,7 +250,7 @@ function findDayBlocks(rows: ExcelCell[][]): GameBlock[] {
           .sort((a, b) => a - b)[0] ?? rows.length;
 
       let resultRow: number | null = null;
-      for (let row = dayCell.row + 1; row < nextHeaderRow; row += 1) {
+      for (let row = headerRow + 1; row < nextHeaderRow; row += 1) {
         if (normalizarTexto(text(rows[row]?.[dayCell.col] ?? null)) === "resultado") {
           resultRow = row;
           break;
@@ -202,7 +258,7 @@ function findDayBlocks(rows: ExcelCell[][]): GameBlock[] {
       }
 
       return {
-        headerRow: dayCell.row,
+        headerRow,
         startCol: dayCell.col,
         totalCol,
         resultRow,
@@ -251,21 +307,35 @@ function parseRanking(sheet: ExcelSheet | null): RankingItem[] {
 
 function parsePagamentos(sheet: ExcelSheet | null): Pagamento[] {
   if (!sheet) return [];
-  const headerRow = sheet.data.findIndex((row) => normalizarTexto(text(row[0])).includes("participantes"));
+  const headerRow = sheet.data.findIndex((row) => {
+    const headers = row.map((cell) => normalizarTexto(text(cell)));
+    const hasParticipant = headers.some((header) => ["participante", "participantes", "nome"].some((alias) => header.includes(alias)));
+    const hasPayment = headers.some((header) => ["pagou", "pago", "pix", "status"].some((alias) => header.includes(alias)));
+    return hasParticipant && hasPayment;
+  });
   if (headerRow < 0) return [];
+
+  const headers = sheet.data[headerRow].map((cell) => normalizarTexto(text(cell)));
+  const participanteCol = headers.findIndex((header) => ["participante", "participantes", "nome"].some((alias) => header.includes(alias)));
+  const pagoCol = headers.findIndex((header) => ["pagou", "pago", "pix", "status"].some((alias) => header.includes(alias)));
+  const dataCol = headers.findIndex((header) => header.includes("data"));
+  const valorCol = headers.findIndex((header) => header.includes("valor"));
+
+  if (participanteCol < 0) return [];
 
   return sheet.data
     .slice(headerRow + 1)
     .map((row) => {
-      const participante = text(row[0]);
+      const participante = text(row[participanteCol]);
       if (!participante) return null;
-      const paidText = normalizarTexto(text(row[1]));
-      const pago = ["sim", "s", "pago", "feito", "ok"].includes(paidText);
+      const paidText = pagoCol >= 0 ? normalizarTexto(text(row[pagoCol])) : "";
+      const pago = ["sim", "s", "pago", "feito", "ok", "true", "1"].includes(paidText);
+      const valor = valorCol >= 0 ? toNumber(row[valorCol]) : 0;
       return {
         participante,
         pago,
-        dataPagamento: formatDateCell(row[2]),
-        valor: PIX_INFO.valor,
+        dataPagamento: dataCol >= 0 ? formatDateCell(row[dataCol]) : null,
+        valor: valor > 0 ? valor : PIX_INFO.valor,
         situacao: pago ? "pago" : "pendente"
       };
     })
