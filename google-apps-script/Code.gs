@@ -738,7 +738,7 @@ function calcularPontuacao_(palpite, resultado) {
   var r = parseScore_(resultado);
   if (!p || !r) return { pontos: 0, cravada: false, tipo: "pendente" };
   if (p.casa === r.casa && p.fora === r.fora) return { pontos: 5, cravada: true, tipo: "exato" };
-  if (winner_(p) === "empate" && winner_(r) === "empate") return { pontos: 1, cravada: false, tipo: "empate" };
+  if (winner_(p) === "empate" && winner_(r) === "empate") return { pontos: 2, cravada: false, tipo: "empate" };
   if (winner_(p) === winner_(r)) return { pontos: 2, cravada: false, tipo: "vencedor" };
   return { pontos: 0, cravada: false, tipo: "erro" };
 }

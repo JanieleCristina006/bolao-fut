@@ -7,7 +7,7 @@ import { formatarMoeda } from "../utils/formatadores";
 const regras = [
   "Placar exato vale 5 pontos",
   "Vencedor correto vale 2 pontos",
-  "Empate correto com placar diferente vale 1 ponto",
+  "Empate correto com placar diferente vale 2 pontos",
   "Palpite errado vale 0 pontos",
   "O ranking desempata pela quantidade de placares cravados",
   `Valor do bolão: ${formatarMoeda(PIX_INFO.valor)}`,
@@ -17,7 +17,7 @@ const regras = [
 const legenda = [
   { tipo: "exato", tone: "green", pontos: "5 pontos" },
   { tipo: "vencedor", tone: "blue", pontos: "2 pontos" },
-  { tipo: "empate", tone: "yellow", pontos: "1 ponto" },
+  { tipo: "empate", tone: "yellow", pontos: "2 pontos" },
   { tipo: "erro", tone: "red", pontos: "0 pontos" },
   { tipo: "pendente", tone: "gray", pontos: "sem resultado" }
 ] as const;

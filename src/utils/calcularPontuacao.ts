@@ -39,7 +39,7 @@ export function calcularPontuacao(palpite: string, resultado: string | null | un
   const sinalResultado = sinal(resultadoParsed);
 
   if (sinalPalpite === "empate" && sinalResultado === "empate") {
-    return { pontos: 1, cravada: false, tipo: "empate" };
+    return { pontos: 2, cravada: false, tipo: "empate" };
   }
 
   if (sinalPalpite === sinalResultado) {

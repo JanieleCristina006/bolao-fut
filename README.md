@@ -208,7 +208,7 @@ A pontuação é calculada no frontend por `src/utils/calcularPontuacao.ts`:
 
 - Placar exato: 5 pontos
 - Vencedor correto: 2 pontos
-- Empate correto com placar diferente: 1 ponto
+- Empate correto com placar diferente: 2 pontos
 - Erro: 0 pontos
 - Sem resultado: pendente
 
