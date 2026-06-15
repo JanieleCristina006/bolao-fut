@@ -7,10 +7,17 @@ interface PodiumProps {
   ranking: RankingItem[];
 }
 
-const podiumStyles = ["bg-yellow-50 border-yellow-200", "bg-slate-50 border-slate-200", "bg-orange-50 border-orange-200"];
+const podiumStyles = [
+  "border-yellow-200 bg-gradient-to-br from-yellow-50 to-white",
+  "border-slate-200 bg-gradient-to-br from-slate-50 to-white",
+  "border-orange-200 bg-gradient-to-br from-orange-50 to-white"
+];
+
+const medalStyles = ["text-yellow-600", "text-slate-500", "text-orange-600"];
 
 export function Podium({ ranking }: PodiumProps) {
   const top = ranking.slice(0, 3);
+
   return (
     <Card className="overflow-hidden">
       <CardHeader>
@@ -20,12 +27,12 @@ export function Podium({ ranking }: PodiumProps) {
         {top.map((item, index) => (
           <div key={item.participante} className={`rounded-lg border p-4 ${podiumStyles[index]}`}>
             <div className="flex items-center justify-between gap-3">
-              <Medal className="h-7 w-7 text-brand-600" aria-hidden />
-              <Badge tone={index === 0 ? "gold" : index === 1 ? "silver" : "bronze"}>{item.posicao}º</Badge>
+              <Medal className={`h-7 w-7 ${medalStyles[index]}`} aria-hidden />
+              <Badge tone={index === 0 ? "gold" : index === 1 ? "silver" : "bronze"}>#{item.posicao}</Badge>
             </div>
-            <h3 className="mt-4 text-base font-black text-slate-950">{item.participante}</h3>
+            <h3 className="mt-4 truncate text-base font-black text-slate-950">{item.participante}</h3>
             <p className="text-sm text-slate-600">
-              {item.pontos} pontos · {item.cravadas} cravadas
+              {item.pontos} pontos - {item.cravadas} cravadas
             </p>
           </div>
         ))}

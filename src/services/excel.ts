@@ -26,8 +26,8 @@ interface GameBlock {
 }
 
 const SHEETS = {
-  palpites: ["bolao - palpites", "bolao palpites", "palpites"],
-  pagamento: ["bolao - pagamento", "bolao pagamento", "pagamento", "pagamentos"],
+  palpites: ["bolão - palpites", "bolão palpites", "palpites"],
+  pagamento: ["bolão - pagamento", "bolão pagamento", "pagamento", "pagamentos"],
   ranking: ["ranking"]
 };
 

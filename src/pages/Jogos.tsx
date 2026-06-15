@@ -117,11 +117,19 @@ export function Jogos() {
         <Input value={filtros.selecao} onChange={(event) => setFiltros((current) => ({ ...current, selecao: event.target.value }))} placeholder="Filtrar por seleção" />
         <Select value={filtros.dia} onChange={(event) => setFiltros((current) => ({ ...current, dia: event.target.value }))}>
           <option value="">Todos os dias</option>
-          {dias.map((dia) => <option key={dia} value={dia}>{dia}</option>)}
+          {dias.map((dia) => (
+            <option key={dia} value={dia}>
+              {dia}
+            </option>
+          ))}
         </Select>
         <Select value={filtros.rodada} onChange={(event) => setFiltros((current) => ({ ...current, rodada: event.target.value }))}>
           <option value="">Todas as rodadas</option>
-          {rodadas.map((rodada) => <option key={rodada} value={rodada}>{rodada}</option>)}
+          {rodadas.map((rodada) => (
+            <option key={rodada} value={rodada}>
+              {rodada}
+            </option>
+          ))}
         </Select>
         <Select value={filtros.status} onChange={(event) => setFiltros((current) => ({ ...current, status: event.target.value }))}>
           <option value="todos">Todos os status</option>

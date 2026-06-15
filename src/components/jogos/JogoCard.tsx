@@ -63,11 +63,7 @@ export function JogoCard({ jogo, palpites, initiallyOpen = false, onPdf }: JogoC
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
-          <Button
-            variant="secondary"
-            icon={<Download className="h-4 w-4" aria-hidden />}
-            onClick={() => onPdf(jogo, palpitesOrdenados)}
-          >
+          <Button variant="secondary" icon={<Download className="h-4 w-4" aria-hidden />} onClick={() => onPdf(jogo, palpitesOrdenados)}>
             PDF do jogo
           </Button>
           <Button

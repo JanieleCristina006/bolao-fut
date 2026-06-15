@@ -17,10 +17,13 @@ export function ParticipanteDetalhes() {
   const { nome = "" } = useParams();
   const nomeDecodificado = decodeURIComponent(nome);
 
-  const loader = useCallback(async (forceRefresh = false) => {
-    const [participante, jogos] = await Promise.all([api.getParticipante(nomeDecodificado, forceRefresh), api.getJogos(forceRefresh)]);
-    return { participante, jogos };
-  }, [nomeDecodificado]);
+  const loader = useCallback(
+    async (forceRefresh = false) => {
+      const [participante, jogos] = await Promise.all([api.getParticipante(nomeDecodificado, forceRefresh), api.getJogos(forceRefresh)]);
+      return { participante, jogos };
+    },
+    [nomeDecodificado]
+  );
 
   const { data, isLoading, error, refetch } = useApiResource<{ participante: ParticipanteDetalhe; jogos: Jogo[] }>(loader);
 
@@ -93,7 +96,9 @@ export function ParticipanteDetalhes() {
                 return (
                   <tr key={jogo.id}>
                     <td className="px-4 py-3 font-bold text-slate-950">{jogo.abreviacao}</td>
-                    <td className="px-4 py-3">{formatarData(jogo.data)} {jogo.horario}</td>
+                    <td className="px-4 py-3">
+                      {formatarData(jogo.data)} {jogo.horario}
+                    </td>
                     <td className="px-4 py-3">{jogo.resultado ?? "pendente"}</td>
                     <td className="px-4 py-3">{palpite?.palpite ?? "-"}</td>
                     <td className="px-4 py-3">

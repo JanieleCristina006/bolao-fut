@@ -21,10 +21,10 @@ import { gerarPdfPagamentos } from "../utils/gerarPdfPagamentos";
 
 function exportarCsv(pagamentos: Pagamento[]): void {
   const linhas = [
-    ["Participante", "Pago", "Data", "Valor", "Situacao"],
+    ["Participante", "Pago", "Data", "Valor", "Situação"],
     ...pagamentos.map((pagamento) => [
       pagamento.participante,
-      pagamento.pago ? "sim" : "nao",
+      pagamento.pago ? "sim" : "não",
       pagamento.dataPagamento ?? "",
       String(pagamento.valor),
       pagamento.situacao

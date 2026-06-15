@@ -10,6 +10,11 @@
   color: #0f172a;
 }
 
+html {
+  min-height: 100%;
+  background: #f4f6f8;
+}
+
 * {
   box-sizing: border-box;
 }
@@ -17,13 +22,26 @@
 body {
   min-width: 320px;
   min-height: 100vh;
+  min-height: 100svh;
   margin: 0;
+  overscroll-behavior-y: none;
+  -webkit-tap-highlight-color: transparent;
 }
 
 button,
 input,
 select {
   font: inherit;
+}
+
+@supports (padding: env(safe-area-inset-bottom)) {
+  .pwa-safe-top {
+    padding-top: env(safe-area-inset-top);
+  }
+
+  .pwa-safe-bottom {
+    padding-bottom: calc(0.5rem + env(safe-area-inset-bottom));
+  }
 }
 
 @media print {

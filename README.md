@@ -13,6 +13,7 @@ Frontend completo em React + Vite + TypeScript para transformar uma planilha de 
 - jsPDF e jspdf-autotable
 - Leitura direta de arquivo Excel (`.xlsx`)
 - Google Apps Script opcional para escrita administrativa
+- PWA instalavel com manifest e service worker
 
 ## Como executar localmente
 
@@ -32,24 +33,28 @@ npm run build
 Copie `.env.example` para `.env` e configure:
 
 ```env
-VITE_EXCEL_FILE_URL=/data/BOLAO_FUTEBOL_INGLESS.xlsx
+# Fonte principal em tempo real via Google Apps Script.
+VITE_GOOGLE_SCRIPT_API_URL=/api/sheets
 
-# Opcional: use Google Apps Script quando precisar gravar pagamentos/resultados/palpites.
-# VITE_GOOGLE_SCRIPT_API_URL=https://script.google.com/macros/s/SEU_ID/exec
+# URL real do Apps Script usada pelo proxy local/Vercel.
+GOOGLE_SCRIPT_API_URL=https://script.google.com/macros/s/SEU_ID/exec
+
+# Fallback local somente leitura.
+# VITE_EXCEL_FILE_URL=/data/BOLAO_FUTEBOL_INGLESS.xlsx
 ```
 
-O arquivo Excel precisa estar disponível para o navegador. Neste projeto, a planilha foi copiada para:
+O arquivo Excel só precisa estar disponível para o navegador quando você quiser usar o fallback local. Neste projeto, a planilha foi copiada para:
 
 ```text
 public/data/BOLAO_FUTEBOL_INGLESS.xlsx
 ```
 
-Por isso a URL usada no `.env` é `/data/BOLAO_FUTEBOL_INGLESS.xlsx`.
+Por isso, se quiser usar o fallback local, a URL é `/data/BOLAO_FUTEBOL_INGLESS.xlsx`.
 
 Prioridade das fontes de dados:
 
-1. `VITE_EXCEL_FILE_URL`
-2. `VITE_GOOGLE_SCRIPT_API_URL`
+1. `VITE_GOOGLE_SCRIPT_API_URL`
+2. `VITE_EXCEL_FILE_URL`
 3. `src/mocks/data.ts`
 
 Enquanto nenhuma variável existir, o app usa `src/mocks/data.ts` automaticamente.
@@ -92,7 +97,7 @@ ADMIN_TOKEN=uma-senha-segura
 6. Tipo: `Aplicativo da Web`.
 7. Executar como: sua conta.
 8. Quem tem acesso: conforme sua necessidade, normalmente `Qualquer pessoa com o link`.
-9. Copie a URL `/exec` e coloque em `VITE_GOOGLE_SCRIPT_API_URL`.
+9. Copie a URL `/exec` e coloque em `GOOGLE_SCRIPT_API_URL`. Mantenha `VITE_GOOGLE_SCRIPT_API_URL=/api/sheets`.
 
 O script procura as abas:
 
@@ -146,7 +151,7 @@ POST:
 }
 ```
 
-O frontend envia POST como `text/plain;charset=utf-8` para evitar preflight CORS comum em Apps Script.
+O frontend chama `/api/sheets` no mesmo domínio. Essa rota atua como proxy, chama o Apps Script pelo servidor e evita o bloqueio CORS causado pelo redirecionamento do `script.google.com`.
 
 ## Segurança administrativa
 
@@ -156,22 +161,31 @@ Essa é uma proteção simples. Para um bolão grande e público, o ideal é usa
 
 ## Como testar
 
-Leitura com Excel:
+Leitura em tempo real com Google Apps Script:
 
-1. Configure `VITE_EXCEL_FILE_URL=/data/BOLAO_FUTEBOL_INGLESS.xlsx` no `.env`.
+1. Configure `VITE_GOOGLE_SCRIPT_API_URL=/api/sheets` e `GOOGLE_SCRIPT_API_URL=https://script.google.com/macros/s/SEU_ID/exec` no `.env`.
 2. Rode `npm run dev`.
 3. Abra Dashboard, Ranking, Jogos, Participantes e Pagamentos.
-4. Use o botão `Atualizar dados` no Dashboard ou Ranking.
+4. Altere algum dado na planilha do Google.
+5. Aguarde até 1 minuto ou use o botão `Atualizar dados` para buscar a mudança na hora.
+
+Quando `VITE_GOOGLE_SCRIPT_API_URL` está configurado, o botão de importar Excel local fica oculto e imports antigos salvos no navegador são ignorados.
+
+Leitura com Excel local:
+
+1. Comente `VITE_GOOGLE_SCRIPT_API_URL` no `.env`.
+2. Configure `VITE_EXCEL_FILE_URL=/data/BOLAO_FUTEBOL_INGLESS.xlsx`.
+3. Rode `npm run dev`.
+4. Abra Dashboard, Ranking, Jogos, Participantes e Pagamentos.
 
 Escrita com Google Apps Script:
 
 1. Configure `ADMIN_TOKEN` no Apps Script.
-2. Configure `VITE_GOOGLE_SCRIPT_API_URL` no `.env`.
-3. Remova ou comente `VITE_EXCEL_FILE_URL` se quiser que o app use a API como fonte principal.
-4. Abra a página `Pagamentos`.
-5. Digite o token administrativo.
-6. Altere um pagamento.
-7. Confira se apenas a célula de status/data foi atualizada na aba `BOLÃO - PAGAMENTO`.
+2. Configure `VITE_GOOGLE_SCRIPT_API_URL=/api/sheets` e `GOOGLE_SCRIPT_API_URL` no `.env`.
+3. Abra a página `Pagamentos`.
+4. Digite o token administrativo.
+5. Altere um pagamento.
+6. Confira se apenas a célula de status/data foi atualizada na aba `BOLÃO - PAGAMENTO`.
 
 Com `VITE_EXCEL_FILE_URL`, a planilha é lida diretamente pelo navegador e fica em modo somente leitura. Para gravar alterações em arquivo/planilha, é necessário Google Apps Script ou backend.
 
@@ -198,9 +212,23 @@ Também há botões de impressão nas páginas de Ranking e Jogos.
 3. Framework: `Vite`.
 4. Build command: `npm run build`.
 5. Output directory: `dist`.
-6. Configure `VITE_EXCEL_FILE_URL` nas variáveis de ambiente da Vercel se a planilha estiver em `public/data`.
-7. Se for usar escrita administrativa, configure também `VITE_GOOGLE_SCRIPT_API_URL`.
-8. Publique.
+6. Configure `VITE_GOOGLE_SCRIPT_API_URL=/api/sheets` nas variáveis de ambiente da Vercel.
+7. Configure `GOOGLE_SCRIPT_API_URL` com a URL `/exec` do Apps Script nas variáveis de ambiente da Vercel.
+8. Configure `VITE_EXCEL_FILE_URL` apenas se quiser publicar usando o Excel local somente leitura.
+9. Publique.
+
+## PWA
+
+O app possui `manifest.webmanifest`, service worker e icones PNG em `public/icons`, entao pode ser instalado pelo navegador como aplicativo.
+
+Para testar localmente:
+
+1. Rode `npm run build`.
+2. Rode `npm run preview`.
+3. Abra a URL do preview no Chrome/Edge.
+4. Use o botao de instalar na barra do navegador ou no menu.
+
+O service worker cacheia o shell do app e assets estaticos. As chamadas `/api/sheets` sempre usam rede para evitar dados antigos da planilha.
 
 ## Pontuação
 

@@ -1,5 +1,6 @@
+import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
-import { CalendarClock, CheckCircle2, Download, RefreshCw, Target, Trophy, Users, XCircle } from "lucide-react";
+import { CalendarClock, CheckCircle2, CreditCard, Download, RefreshCw, Smartphone, Target, Trophy, Users } from "lucide-react";
 import { Podium } from "../components/dashboard/Podium";
 import { StatCard } from "../components/dashboard/StatCard";
 import { Badge } from "../components/ui/Badge";
@@ -9,11 +10,23 @@ import { EmptyState } from "../components/ui/EmptyState";
 import { ErrorState } from "../components/ui/ErrorState";
 import { LoadingSkeleton } from "../components/ui/LoadingSkeleton";
 import { useDashboard } from "../hooks/useDashboard";
+import { isPwaInstalled, openPwaInstallPrompt, PWA_INSTALL_STATE_CHANGE_EVENT } from "../pwa";
 import { formatarData, formatarDataHora } from "../utils/formatadores";
 import { gerarPdfRelatorioGeral } from "../utils/gerarPdfRelatorioGeral";
 
 export function Dashboard() {
   const { data, isLoading, error, refetch } = useDashboard();
+  const [isAppInstalled, setIsAppInstalled] = useState(isPwaInstalled);
+
+  useEffect(() => {
+    const syncPwaState = () => setIsAppInstalled(isPwaInstalled());
+    window.addEventListener(PWA_INSTALL_STATE_CHANGE_EVENT, syncPwaState);
+    window.addEventListener("appinstalled", syncPwaState);
+    return () => {
+      window.removeEventListener(PWA_INSTALL_STATE_CHANGE_EVENT, syncPwaState);
+      window.removeEventListener("appinstalled", syncPwaState);
+    };
+  }, []);
 
   if (isLoading) return <LoadingSkeleton rows={8} />;
   if (error || !data) return <ErrorState message={error ?? "Dados indisponíveis."} onRetry={refetch} />;
@@ -24,17 +37,33 @@ export function Dashboard() {
 
   return (
     <div className="space-y-6 pb-20 lg:pb-0">
-      <section className="rounded-xl bg-slate-950 px-5 py-6 text-white shadow-soft">
-        <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-          <div>
-            <p className="text-sm font-bold uppercase tracking-wide text-brand-100">Portal do bolão</p>
+      <section
+        className="overflow-hidden rounded-lg bg-slate-950 bg-cover bg-center px-5 py-6 text-white shadow-soft sm:px-6 sm:py-8"
+        style={{
+          backgroundImage:
+            "linear-gradient(90deg, rgba(2, 6, 23, 0.94), rgba(2, 6, 23, 0.68), rgba(2, 6, 23, 0.2)), url('/banner.jpg')"
+        }}
+      >
+        <div className="flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
+          <div className="max-w-2xl">
+            <p className="text-sm font-black uppercase tracking-wide text-brand-100">Portal do bolão</p>
             <h2 className="mt-2 text-2xl font-black sm:text-4xl">Bolão Futebol Inglês</h2>
-            <p className="mt-2 text-sm text-slate-300">Última atualização: {formatarDataHora(data.ultimaAtualizacao)}</p>
+            <p className="mt-2 text-sm text-slate-200">Última atualização: {formatarDataHora(data.ultimaAtualizacao)}</p>
           </div>
           <div className="flex flex-wrap gap-2">
             <Button variant="secondary" icon={<RefreshCw className="h-4 w-4" aria-hidden />} onClick={refetch}>
               Atualizar dados
             </Button>
+            {!isAppInstalled ? (
+              <Button
+                variant="secondary"
+                className="border-brand-200 bg-brand-50 text-brand-700 hover:bg-brand-100 focus:ring-brand-100"
+                icon={<Smartphone className="h-4 w-4" aria-hidden />}
+                onClick={openPwaInstallPrompt}
+              >
+                Baixar app
+              </Button>
+            ) : null}
             <Button variant="primary" icon={<Download className="h-4 w-4" aria-hidden />} onClick={() => gerarPdfRelatorioGeral(data)}>
               Relatório geral
             </Button>
@@ -43,12 +72,12 @@ export function Dashboard() {
       </section>
 
       <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-6">
-        <StatCard label="Líder atual" value={lider?.participante ?? "-"} icon={<Trophy className="h-6 w-6" aria-hidden />} />
-        <StatCard label="Participantes" value={data.resumo.totalParticipantes} icon={<Users className="h-6 w-6" aria-hidden />} />
-        <StatCard label="Finalizados" value={data.resumo.jogosFinalizados} icon={<CheckCircle2 className="h-6 w-6" aria-hidden />} />
-        <StatCard label="Pendentes" value={data.resumo.jogosPendentes} icon={<CalendarClock className="h-6 w-6" aria-hidden />} />
-        <StatCard label="Cravadas" value={data.resumo.totalCravadas} icon={<Target className="h-6 w-6" aria-hidden />} />
-        <StatCard label="Pagamentos" value={data.resumo.pagamentosConfirmados} icon={<XCircle className="h-6 w-6" aria-hidden />} />
+        <StatCard tone="gold" label="Líder atual" value={lider?.participante ?? "-"} icon={<Trophy className="h-6 w-6" aria-hidden />} />
+        <StatCard tone="blue" label="Participantes" value={data.resumo.totalParticipantes} icon={<Users className="h-6 w-6" aria-hidden />} />
+        <StatCard tone="emerald" label="Finalizados" value={data.resumo.jogosFinalizados} icon={<CheckCircle2 className="h-6 w-6" aria-hidden />} />
+        <StatCard tone="amber" label="Pendentes" value={data.resumo.jogosPendentes} icon={<CalendarClock className="h-6 w-6" aria-hidden />} />
+        <StatCard tone="violet" label="Cravadas" value={data.resumo.totalCravadas} icon={<Target className="h-6 w-6" aria-hidden />} />
+        <StatCard tone="rose" label="Pagamentos" value={data.resumo.pagamentosConfirmados} icon={<CreditCard className="h-6 w-6" aria-hidden />} />
       </section>
 
       <section className="grid gap-6 xl:grid-cols-[1fr_0.9fr]">
@@ -62,11 +91,21 @@ export function Dashboard() {
             </Link>
           </CardHeader>
           <CardBody className="space-y-3">
-            {data.ranking.slice(0, 5).map((item) => (
-              <div key={item.participante} className="flex items-center justify-between gap-3 rounded-lg bg-slate-50 p-3">
-                <div>
-                  <strong className="text-slate-950">{item.posicao}º {item.participante}</strong>
-                  <p className="text-xs text-slate-500">{item.cravadas} cravadas</p>
+            {data.ranking.slice(0, 5).map((item, index) => (
+              <div
+                key={item.participante}
+                className="flex items-center justify-between gap-3 rounded-lg border border-slate-100 bg-gradient-to-r from-slate-50 to-white p-3"
+              >
+                <div className="flex min-w-0 items-center gap-3">
+                  <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-slate-950 text-sm font-black text-white">
+                    {index + 1}
+                  </span>
+                  <div className="min-w-0">
+                    <strong className="block truncate text-slate-950">
+                      #{item.posicao} {item.participante}
+                    </strong>
+                    <p className="text-xs text-slate-500">{item.cravadas} cravadas</p>
+                  </div>
                 </div>
                 <Badge tone="dark">{item.pontos} pts</Badge>
               </div>
@@ -88,9 +127,13 @@ export function Dashboard() {
               <EmptyState title="Sem jogos pendentes" description="Todos os jogos já possuem resultado." />
             ) : (
               proximosJogos.map((jogo) => (
-                <div key={jogo.id} className="rounded-lg border border-slate-200 p-3">
-                  <strong className="text-slate-950">{jogo.mandante} x {jogo.visitante}</strong>
-                  <p className="text-sm text-slate-500">{formatarData(jogo.data)} às {jogo.horario} · {jogo.rodada}</p>
+                <div key={jogo.id} className="rounded-lg border border-slate-200 bg-white p-3 transition hover:border-brand-100 hover:bg-brand-50/30">
+                  <strong className="text-slate-950">
+                    {jogo.mandante} x {jogo.visitante}
+                  </strong>
+                  <p className="text-sm text-slate-500">
+                    {formatarData(jogo.data)} às {jogo.horario} - {jogo.rodada}
+                  </p>
                 </div>
               ))
             )}
@@ -103,7 +146,7 @@ export function Dashboard() {
           </CardHeader>
           <CardBody className="space-y-3">
             {ultimosResultados.map((jogo) => (
-              <div key={jogo.id} className="flex items-center justify-between gap-3 rounded-lg border border-slate-200 p-3">
+              <div key={jogo.id} className="flex items-center justify-between gap-3 rounded-lg border border-emerald-100 bg-emerald-50/40 p-3">
                 <div>
                   <strong className="text-slate-950">{jogo.abreviacao}</strong>
                   <p className="text-sm text-slate-500">{formatarData(jogo.data)}</p>

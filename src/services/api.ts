@@ -52,7 +52,7 @@ function getStorage(): Storage | null {
 }
 
 function getBaseDataSource(): DataSource {
-  return EXCEL_URL ? "excel" : API_URL ? "api" : "mock";
+  return API_URL ? "api" : EXCEL_URL ? "excel" : "mock";
 }
 
 function isDashboardData(value: unknown): value is DashboardData {
@@ -69,6 +69,11 @@ function isDashboardData(value: unknown): value is DashboardData {
 }
 
 function readImportedSpreadsheet(): ImportedSpreadsheet | null {
+  if (getBaseDataSource() === "api") {
+    getStorage()?.removeItem(IMPORTED_SPREADSHEET_KEY);
+    return null;
+  }
+
   const raw = getStorage()?.getItem(IMPORTED_SPREADSHEET_KEY);
   if (!raw) return null;
 
@@ -90,7 +95,7 @@ function saveImportedSpreadsheet(nextSpreadsheet: ImportedSpreadsheet): void {
   try {
     getStorage()?.setItem(IMPORTED_SPREADSHEET_KEY, JSON.stringify(nextSpreadsheet));
   } catch {
-    // Importacao continua funcionando em memoria se o navegador negar armazenamento.
+    // Importação continua funcionando em memória se o navegador negar armazenamento.
   }
 }
 
@@ -183,13 +188,14 @@ function normalizarDashboard(data: DashboardData): DashboardData {
 async function request<T>(action: string, forceRefresh = false): Promise<T> {
   if (importedSpreadsheet) {
     const importedData = getExcelAction<T>(importedSpreadsheet.dashboard, action);
-    if (importedData === null) throw new Error("Registro nao encontrado na planilha importada.");
+    if (importedData === null) throw new Error("Registro não encontrado na planilha importada.");
     return importedData;
   }
 
   const dataSource = getBaseDataSource();
   const cacheKey = `bolao-cache:${dataSource}:${action}`;
-  if (!forceRefresh) {
+  const shouldUseCache = dataSource !== "api";
+  if (shouldUseCache && !forceRefresh) {
     const cached = getCache<T>(cacheKey);
     if (cached) return cached;
   }
@@ -213,7 +219,7 @@ async function request<T>(action: string, forceRefresh = false): Promise<T> {
 
   const controller = new AbortController();
   const timeout = window.setTimeout(() => controller.abort(), 15000);
-  const url = new URL(API_URL);
+  const url = new URL(API_URL, window.location.origin);
   const [baseAction, queryString] = action.split("?");
   url.searchParams.set("action", baseAction);
   if (queryString) {
@@ -221,9 +227,8 @@ async function request<T>(action: string, forceRefresh = false): Promise<T> {
   }
 
   try {
-    const response = await fetch(url.toString(), { signal: controller.signal });
+    const response = await fetch(url.toString(), { cache: "no-store", signal: controller.signal });
     const json = await parseApiJson<T>(response, "Não foi possível acessar a API da planilha");
-    setCache(cacheKey, json);
     return json;
   } catch (error) {
     if (error instanceof DOMException && error.name === "AbortError") {
@@ -236,10 +241,10 @@ async function request<T>(action: string, forceRefresh = false): Promise<T> {
 }
 
 async function post<T>(payload: Record<string, unknown>): Promise<T> {
-  if (importedSpreadsheet || EXCEL_URL) {
+  if (importedSpreadsheet || getBaseDataSource() === "excel") {
     const message: ApiMessage = {
       ok: false,
-      message: "A integracao direta com Excel e somente leitura no navegador. Para gravar pagamentos, use Google Apps Script ou um backend."
+      message: "A integração direta com Excel é somente leitura no navegador. Para gravar pagamentos, use Google Apps Script ou um backend."
     };
     return Promise.resolve(message as T);
   }
@@ -316,7 +321,7 @@ export function getDataSourceLabel(): string {
   if (importedSpreadsheet) return `Planilha importada: ${importedSpreadsheet.fileName}`;
 
   const dataSource = getBaseDataSource();
-  return dataSource === "excel" ? "Excel conectado" : dataSource === "api" ? "Google Planilhas conectado" : "Modo demonstracao";
+  return dataSource === "excel" ? "Excel conectado" : dataSource === "api" ? "Google Planilhas conectado" : "Modo demonstração";
 }
 
 export function getImportedSpreadsheetName(): string | null {
@@ -331,7 +336,19 @@ export function isAdminWritesEnabled(): boolean {
   return !importedSpreadsheet && getBaseDataSource() === "api";
 }
 
+export function isLiveDataSourceActive(): boolean {
+  return !importedSpreadsheet && getBaseDataSource() === "api";
+}
+
+export function isSpreadsheetImportEnabled(): boolean {
+  return getBaseDataSource() !== "api";
+}
+
 async function importarPlanilha(file: File): Promise<DashboardData> {
+  if (!isSpreadsheetImportEnabled()) {
+    throw new Error("A fonte em tempo real via Google Apps Script já está ativa. Desative VITE_GOOGLE_SCRIPT_API_URL para importar Excel local.");
+  }
+
   if (!/\.xlsx$/i.test(file.name)) {
     throw new Error("Selecione um arquivo Excel .xlsx.");
   }

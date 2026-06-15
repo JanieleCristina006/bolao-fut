@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
-import { DATA_SOURCE_CHANGE_EVENT } from "../services/api";
+import { LIVE_REFRESH_MS } from "../constants";
+import { DATA_SOURCE_CHANGE_EVENT, isLiveDataSourceActive } from "../services/api";
 
 interface ApiResourceState<T> {
   data: T | null;
@@ -40,6 +41,16 @@ export function useApiResource<T>(loader: (forceRefresh?: boolean) => Promise<T>
 
     window.addEventListener(DATA_SOURCE_CHANGE_EVENT, handleDataSourceChange);
     return () => window.removeEventListener(DATA_SOURCE_CHANGE_EVENT, handleDataSourceChange);
+  }, [carregar]);
+
+  useEffect(() => {
+    const intervalId = window.setInterval(() => {
+      if (!isLiveDataSourceActive()) return;
+      if (document.visibilityState === "hidden") return;
+      void carregar(true);
+    }, LIVE_REFRESH_MS);
+
+    return () => window.clearInterval(intervalId);
   }, [carregar]);
 
   return {

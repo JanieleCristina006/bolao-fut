@@ -1,7 +1,7 @@
 const SHEET_NAMES = {
-  palpites: ["BOLAO - PALPITES"],
-  tabela: ["BOLAO - TABELA"],
-  pagamento: ["BOLAO - PAGAMENTO"],
+  palpites: ["BOLÃO - PALPITES"],
+  tabela: ["BOLÃO - TABELA"],
+  pagamento: ["BOLÃO - PAGAMENTO"],
   ranking: ["RANKING"]
 };
 
@@ -9,55 +9,55 @@ const VALOR_PIX = 10;
 const MAX_SCAN_ROWS = 120;
 
 const TEAM_NAMES = {
-  AFS: "Africa do Sul",
-  AGL: "Argelia",
-  ALG: "Argelia",
+  AFS: "África do Sul",
+  AGL: "Argélia",
+  ALG: "Argélia",
   ALE: "Alemanha",
-  ARA: "Arabia Saudita",
+  ARA: "Arábia Saudita",
   ARG: "Argentina",
-  AUS: "Australia",
-  AUT: "Austria",
-  BEL: "Belgica",
-  BOS: "Bosnia",
+  AUS: "Austrália",
+  AUT: "Áustria",
+  BEL: "Bélgica",
+  BOS: "Bósnia",
   BRA: "Brasil",
   CAB: "Cabo Verde",
-  CAN: "Canada",
+  CAN: "Canadá",
   CAT: "Catar",
-  COL: "Colombia",
+  COL: "Colômbia",
   COM: "Costa do Marfim",
   COR: "Coreia do Sul",
-  CRO: "Croacia",
-  CUR: "Curacao",
+  CRO: "Croácia",
+  CUR: "Curaçao",
   EGI: "Egito",
   EQU: "Equador",
-  ESC: "Escocia",
+  ESC: "Escócia",
   ESP: "Espanha",
   EUA: "Estados Unidos",
-  FRA: "Franca",
+  FRA: "França",
   GAN: "Gana",
   HAI: "Haiti",
   HOL: "Holanda",
   ING: "Inglaterra",
-  IRA: "Ira",
+  IRA: "Irã",
   IRQ: "Iraque",
-  JAP: "Japao",
-  JOR: "Jordania",
+  JAP: "Japão",
+  JOR: "Jordânia",
   MAR: "Marrocos",
-  MEX: "Mexico",
+  MEX: "México",
   NOR: "Noruega",
-  NZL: "Nova Zelandia",
-  PAN: "Panama",
+  NZL: "Nova Zelândia",
+  PAN: "Panamá",
   PAR: "Paraguai",
   POR: "Portugal",
   RDC: "RD Congo",
   SEN: "Senegal",
-  SUE: "Suecia",
-  SUI: "Suica",
-  TCH: "Tchequia",
-  TUN: "Tunisia",
+  SUE: "Suécia",
+  SUI: "Suíça",
+  TCH: "Tchéquia",
+  TUN: "Tunísia",
   TUR: "Turquia",
   URU: "Uruguai",
-  UZB: "Uzbequistao"
+  UZB: "Uzbequistão"
 };
 
 function doGet(e) {
@@ -93,7 +93,7 @@ function doPost(e) {
       return json_({ ok: true, message: "Palpite atualizado com sucesso." });
     }
 
-    throw new Error("Acao POST invalida.");
+    throw new Error("Ação POST inválida.");
   } catch (err) {
     return json_({ ok: false, message: errorMessage_(err) });
   } finally {
@@ -118,7 +118,7 @@ function handleGet_(action, params) {
   if (action === "participantes") return snapshot.participantes;
   if (action === "participante") return buildParticipanteDetalhe_(snapshot, params.nome);
 
-  throw new Error("Acao GET invalida.");
+  throw new Error("Ação GET inválida.");
 }
 
 function readSnapshot_() {
@@ -471,7 +471,7 @@ function buildParticipanteDetalhe_(snapshot, nome) {
   var participante = snapshot.participantes.find(function (item) {
     return normalizarTexto_(item.nome) === nomeNormalizado;
   });
-  if (!participante) throw new Error("Participante nao encontrado.");
+  if (!participante) throw new Error("Participante não encontrado.");
 
   var palpites = snapshot.palpites.filter(function (palpite) {
     return normalizarTexto_(palpite.participante) === nomeNormalizado;
@@ -489,25 +489,25 @@ function buildParticipanteDetalhe_(snapshot, nome) {
 
 function atualizarPagamento_(payload) {
   var participante = normalizarNome_(payload.participante);
-  if (!participante) throw new Error("Participante obrigatorio.");
+  if (!participante) throw new Error("Participante obrigatório.");
   if (typeof payload.pago !== "boolean") throw new Error("Campo pago deve ser booleano.");
 
   var ss = SpreadsheetApp.getActiveSpreadsheet();
   var sheet = findSheet_(ss, SHEET_NAMES.pagamento, true);
   var values = sheet.getDataRange().getValues();
   var headerInfo = detectHeader_(values, ["participante", "nome", "pix", "pagou", "data"]);
-  if (!headerInfo) throw new Error("Cabecalho de pagamentos nao encontrado.");
+  if (!headerInfo) throw new Error("Cabeçalho de pagamentos não encontrado.");
 
   var headers = headerInfo.headers;
   var participanteCol = findColumn_(headers, ["participante", "nome"]);
   var pagoCol = findColumn_(headers, ["pagou", "pago", "pix"]);
   var dataCol = findColumn_(headers, ["data"]);
-  if (participanteCol < 0 || pagoCol < 0) throw new Error("Colunas de participante/pagamento nao encontradas.");
+  if (participanteCol < 0 || pagoCol < 0) throw new Error("Colunas de participante/pagamento não encontradas.");
 
   var targetRow = findRowByName_(values, headerInfo.row + 1, participanteCol, participante);
-  if (targetRow < 0) throw new Error("Participante nao encontrado na aba de pagamento.");
+  if (targetRow < 0) throw new Error("Participante não encontrado na aba de pagamento.");
 
-  setCellValueSafe_(sheet, targetRow + 1, pagoCol + 1, payload.pago ? "SIM" : "NAO");
+  setCellValueSafe_(sheet, targetRow + 1, pagoCol + 1, payload.pago ? "SIM" : "NÃO");
   if (dataCol >= 0) {
     setCellValueSafe_(sheet, targetRow + 1, dataCol + 1, payload.pago ? parseDateForSheet_(payload.dataPagamento) : "");
   }
@@ -516,14 +516,14 @@ function atualizarPagamento_(payload) {
 function atualizarResultado_(payload) {
   var jogoId = String(payload.jogoId || "");
   var resultado = formatScore_(payload.resultado);
-  if (!jogoId) throw new Error("jogoId obrigatorio.");
-  if (!resultado) throw new Error("Resultado invalido. Use formato 2x1.");
+  if (!jogoId) throw new Error("jogoId obrigatório.");
+  if (!resultado) throw new Error("Resultado inválido. Use formato 2x1.");
 
   var ss = SpreadsheetApp.getActiveSpreadsheet();
   var parsed = readPalpitesSheet_(ss);
   var target = parsed.index.jogos[jogoId];
   if (!target || !target.resultadoRow || !target.resultadoCol) {
-    throw new Error("Celula de resultado nao encontrada para este jogo.");
+    throw new Error("Célula de resultado não encontrada para este jogo.");
   }
 
   var sheet = findSheet_(ss, SHEET_NAMES.palpites, true);
@@ -534,35 +534,35 @@ function atualizarPalpite_(payload) {
   var participante = normalizarNome_(payload.participante);
   var jogoId = String(payload.jogoId || "");
   var palpite = formatScore_(payload.palpite);
-  if (!participante || !jogoId || !palpite) throw new Error("Participante, jogoId e palpite valido sao obrigatorios.");
+  if (!participante || !jogoId || !palpite) throw new Error("Participante, jogoId e palpite válido são obrigatórios.");
 
   var ss = SpreadsheetApp.getActiveSpreadsheet();
   var parsed = readPalpitesSheet_(ss);
   var target = parsed.index.palpites[jogoId + "::" + normalizarTexto_(participante)];
-  if (!target) throw new Error("Celula de palpite nao encontrada.");
+  if (!target) throw new Error("Célula de palpite não encontrada.");
 
   var sheet = findSheet_(ss, SHEET_NAMES.palpites, true);
   setCellValueSafe_(sheet, target.row, target.col, palpite);
 }
 
 function parsePostPayload_(e) {
-  if (!e || !e.postData || !e.postData.contents) throw new Error("Corpo da requisicao ausente.");
+  if (!e || !e.postData || !e.postData.contents) throw new Error("Corpo da requisição ausente.");
   try {
     return JSON.parse(e.postData.contents);
   } catch (err) {
-    throw new Error("JSON invalido no corpo da requisicao.");
+    throw new Error("JSON inválido no corpo da requisição.");
   }
 }
 
 function assertAdminToken_(token) {
   var configured = PropertiesService.getScriptProperties().getProperty("ADMIN_TOKEN");
-  if (!configured) throw new Error("ADMIN_TOKEN nao configurado em PropertiesService.");
-  if (String(token || "") !== configured) throw new Error("Token administrativo invalido.");
+  if (!configured) throw new Error("ADMIN_TOKEN não configurado em PropertiesService.");
+  if (String(token || "") !== configured) throw new Error("Token administrativo inválido.");
 }
 
 function setCellValueSafe_(sheet, row, col, value) {
   var range = sheet.getRange(row, col);
-  if (range.getFormula()) throw new Error("A celula de destino contem formula e nao sera sobrescrita.");
+  if (range.getFormula()) throw new Error("A célula de destino contém fórmula e não será sobrescrita.");
   range.setValue(value);
 }
 
@@ -572,7 +572,7 @@ function findSheet_(ss, aliases, required) {
   var sheet = sheets.find(function (item) {
     return wanted.indexOf(normalizarTexto_(item.getName())) >= 0;
   });
-  if (!sheet && required) throw new Error("Aba nao encontrada: " + aliases[0]);
+  if (!sheet && required) throw new Error("Aba não encontrada: " + aliases[0]);
   return sheet || null;
 }
 

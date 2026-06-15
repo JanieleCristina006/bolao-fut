@@ -7,6 +7,7 @@ export const PIX_INFO = {
 };
 
 export const CACHE_TTL_MS = 1000 * 60 * 5;
+export const LIVE_REFRESH_MS = 1000 * 60;
 
 export const PAGE_SIZE = 8;
 
