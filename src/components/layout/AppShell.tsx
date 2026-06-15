@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type ChangeEvent, type ReactNode } from "react";
 import { NavLink } from "react-router-dom";
-import { CreditCard, FileText, LayoutDashboard, ListChecks, RotateCcw, Trophy, Upload, Users } from "lucide-react";
+import { ClipboardList, CreditCard, FileText, LayoutDashboard, ListChecks, RotateCcw, Trophy, Upload, Users } from "lucide-react";
 import { InstallPwaPrompt } from "../pwa/InstallPwaPrompt";
 import { APP_NAME } from "../../constants";
 import { api, DATA_SOURCE_CHANGE_EVENT, isImportedSpreadsheetActive, isSpreadsheetImportEnabled } from "../../services/api";
@@ -12,6 +12,7 @@ const navItems = [
   { to: "/", label: "Dashboard", icon: LayoutDashboard },
   { to: "/ranking", label: "Ranking", icon: Trophy },
   { to: "/jogos", label: "Jogos", icon: ListChecks },
+  { to: "/importar-whatsapp", label: "Importar palpites", icon: ClipboardList },
   { to: "/participantes", label: "Participantes", icon: Users },
   { to: "/pagamentos", label: "Pagamentos", icon: CreditCard },
   { to: "/regulamento", label: "Regulamento", icon: FileText }
@@ -133,7 +134,7 @@ export function AppShell({ children }: { children: ReactNode }) {
         className="pwa-safe-bottom fixed bottom-0 left-0 right-0 z-30 border-t border-slate-200 bg-white px-2 py-2 shadow-[0_-10px_30px_rgba(15,23,42,0.12)] lg:hidden no-print"
         aria-label="Navegação mobile"
       >
-        <div className="grid grid-cols-6 gap-1">
+        <div className="grid grid-cols-7 gap-1">
           {navItems.map((item) => (
             <NavLink
               key={item.to}

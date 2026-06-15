@@ -14,6 +14,7 @@ import type {
   ParticipanteDetalhe,
   RankingItem
 } from "../types";
+import type { ImportarPalpitesEmLotePayload, ImportarPalpitesEmLoteResponse } from "../types/importacaoPalpites";
 
 const EXCEL_URL = (import.meta.env.VITE_EXCEL_FILE_URL as string | undefined)?.trim();
 const API_URL = (import.meta.env.VITE_GOOGLE_SCRIPT_API_URL as string | undefined)?.trim();
@@ -244,7 +245,7 @@ async function post<T>(payload: Record<string, unknown>): Promise<T> {
   if (importedSpreadsheet || getBaseDataSource() === "excel") {
     const message: ApiMessage = {
       ok: false,
-      message: "A integração direta com Excel é somente leitura no navegador. Para gravar pagamentos, use Google Apps Script ou um backend."
+      message: "A integração direta com Excel é somente leitura no navegador. Para gravar alterações, use Google Apps Script ou um backend."
     };
     return Promise.resolve(message as T);
   }
@@ -392,5 +393,7 @@ export const api = {
   atualizarResultado: (payload: AtualizarResultadoPayload) =>
     post<ApiMessage>({ action: "atualizarResultado", ...payload }),
   atualizarPalpite: (payload: AtualizarPalpitePayload) =>
-    post<ApiMessage>({ action: "atualizarPalpite", ...payload })
+    post<ApiMessage>({ action: "atualizarPalpite", ...payload }),
+  importarPalpitesEmLote: (payload: ImportarPalpitesEmLotePayload) =>
+    post<ImportarPalpitesEmLoteResponse>({ action: "importarPalpitesEmLote", ...payload })
 };

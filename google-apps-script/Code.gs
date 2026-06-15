@@ -93,6 +93,10 @@ function doPost(e) {
       return json_({ ok: true, message: "Palpite atualizado com sucesso." });
     }
 
+    if (action === "importarPalpitesEmLote") {
+      return json_(importarPalpitesEmLote_(payload));
+    }
+
     throw new Error("Ação POST inválida.");
   } catch (err) {
     return json_({ ok: false, message: errorMessage_(err) });
@@ -324,8 +328,15 @@ function readPalpitesSheet_(ss) {
       var stopRow = resultadoInfo ? resultadoInfo.row : Math.min(values.length - 1, row + 35);
       for (var participantRow = row + 1; participantRow < stopRow; participantRow += 1) {
         var participante = participantCol >= 0 ? normalizarNome_(values[participantRow][participantCol]) : "";
+        if (!participante || shouldSkipParticipantName_(participante)) continue;
+
+        index.palpites[id + "::" + normalizarTexto_(participante)] = {
+          row: participantRow + 1,
+          col: col + 1
+        };
+
         var palpite = formatScore_(values[participantRow][col]);
-        if (!participante || shouldSkipParticipantName_(participante) || !palpite) continue;
+        if (!palpite) continue;
 
         var pontuacao = calcularPontuacao_(palpite, resultado);
         palpites.push({
@@ -337,10 +348,6 @@ function readPalpitesSheet_(ss) {
           tipo: pontuacao.tipo
         });
 
-        index.palpites[id + "::" + normalizarTexto_(participante)] = {
-          row: participantRow + 1,
-          col: col + 1
-        };
       }
     }
   }
@@ -485,6 +492,153 @@ function buildParticipanteDetalhe_(snapshot, nome) {
     palpites: palpites,
     jogosSemPalpite: snapshot.jogos.filter(function (jogo) { return !jogosComPalpite[jogo.id]; })
   });
+}
+
+function importarPalpitesEmLote_(payload) {
+  var itens = payload.palpites;
+  if (!Array.isArray(itens)) throw new Error("Lista de palpites obrigatória.");
+  if (!itens.length) throw new Error("Nenhum palpite enviado para importação.");
+
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var sheet = findSheet_(ss, SHEET_NAMES.palpites, true);
+  var parsed = readPalpitesSheet_(ss);
+  var values = sheet.getDataRange().getValues();
+  var detalhes = [];
+  var erros = [];
+  var updates = [];
+  var ignorados = 0;
+
+  itens.forEach(function (item, index) {
+    try {
+      var participante = normalizarNome_(item.participante);
+      var jogoId = String(item.jogoId || "");
+      var golsCasa = Number(item.golsCasa);
+      var golsFora = Number(item.golsFora);
+      var decisao = String(item.decisao || "substituir");
+
+      if (!participante) throw new Error("Participante obrigatório.");
+      if (!jogoId) throw new Error("jogoId obrigatório.");
+      if (["substituir", "manter", "ignorar"].indexOf(decisao) < 0) throw new Error("Decisão de importação inválida.");
+      if (!isValidScoreNumber_(golsCasa) || !isValidScoreNumber_(golsFora)) throw new Error("Placar inválido.");
+
+      var jogo = findJogoById_(parsed.jogos, jogoId);
+      if (!jogo) throw new Error("Jogo não encontrado na aba de palpites.");
+
+      var target = parsed.index.palpites[jogoId + "::" + normalizarTexto_(participante)];
+      if (!target) throw new Error("Célula de palpite não encontrada para participante e jogo.");
+
+      var novoPalpite = golsCasa + "x" + golsFora;
+      var atual = formatScore_(values[target.row - 1][target.col - 1]);
+      var detalheBase = {
+        participante: participante,
+        jogo: jogo.mandante + " x " + jogo.visitante,
+        atual: atual || "",
+        novo: novoPalpite
+      };
+
+      if (decisao === "ignorar") {
+        ignorados += 1;
+        detalhes.push(Object.assign({}, detalheBase, { status: "ignorado" }));
+        return;
+      }
+
+      if (atual && decisao !== "substituir") {
+        ignorados += 1;
+        detalhes.push(Object.assign({}, detalheBase, { status: "mantido" }));
+        return;
+      }
+
+      if (atual === novoPalpite) {
+        ignorados += 1;
+        detalhes.push(Object.assign({}, detalheBase, { status: "sem_alteracao" }));
+        return;
+      }
+
+      if (sheet.getRange(target.row, target.col).getFormula()) {
+        throw new Error("A célula de destino contém fórmula e não será sobrescrita.");
+      }
+
+      updates.push({
+        row: target.row,
+        col: target.col,
+        value: novoPalpite,
+        atual: atual || "",
+        detalhe: detalheBase
+      });
+    } catch (err) {
+      var message = "Item " + (index + 1) + ": " + errorMessage_(err);
+      erros.push(message);
+      detalhes.push({
+        participante: normalizarNome_(item && item.participante),
+        jogo: String(item && item.jogoId || ""),
+        status: "erro",
+        erro: message
+      });
+    }
+  });
+
+  writePalpiteUpdates_(sheet, updates);
+
+  var importados = 0;
+  var atualizados = 0;
+  updates.forEach(function (update) {
+    if (update.atual) {
+      atualizados += 1;
+      detalhes.push(Object.assign({}, update.detalhe, { status: "atualizado" }));
+    } else {
+      importados += 1;
+      detalhes.push(Object.assign({}, update.detalhe, { status: "importado" }));
+    }
+  });
+
+  SpreadsheetApp.flush();
+
+  return {
+    ok: true,
+    message: "Importação concluída: " + importados + " novos, " + atualizados + " atualizados, " + ignorados + " ignorados.",
+    importados: importados,
+    atualizados: atualizados,
+    ignorados: ignorados,
+    erros: erros,
+    detalhes: detalhes
+  };
+}
+
+function isValidScoreNumber_(value) {
+  return isFinite(value) && Math.floor(value) === value && value >= 0 && value <= 99;
+}
+
+function findJogoById_(jogos, jogoId) {
+  return jogos.find(function (jogo) { return jogo.id === jogoId; }) || null;
+}
+
+function writePalpiteUpdates_(sheet, updates) {
+  if (!updates.length) return;
+
+  updates.sort(function (a, b) {
+    return a.col - b.col || a.row - b.row;
+  });
+
+  var group = [];
+  function flushGroup() {
+    if (!group.length) return;
+    var first = group[0];
+    var nextValues = group.map(function (item) { return [item.value]; });
+    sheet.getRange(first.row, first.col, group.length, 1).setValues(nextValues);
+    group = [];
+  }
+
+  updates.forEach(function (update) {
+    var previous = group[group.length - 1];
+    if (!previous || (previous.col === update.col && previous.row + 1 === update.row)) {
+      group.push(update);
+      return;
+    }
+    flushGroup();
+    group.push(update);
+  });
+
+  flushGroup();
 }
 
 function atualizarPagamento_(payload) {
@@ -744,7 +898,7 @@ function calcularPontuacao_(palpite, resultado) {
 }
 
 function parseScore_(value) {
-  var match = cleanString_(value).match(/(\d{1,2})\s*[xX-]\s*(\d{1,2})/);
+  var match = cleanString_(value).match(/(\d{1,2})\s*(?:[xX-]|\ba\b)\s*(\d{1,2})/i);
   if (!match) return null;
   return { casa: Number(match[1]), fora: Number(match[2]) };
 }

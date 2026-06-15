@@ -1,0 +1,11 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "noEmit": false,
+    "outDir": ".tmp-tests",
+    "rootDir": "src",
+    "module": "ESNext",
+    "moduleResolution": "Bundler"
+  },
+  "include": ["src/types/**/*.ts", "src/utils/normalizarTexto.ts", "src/utils/processarPalpitesWhatsApp.ts", "src/utils/processarPalpitesWhatsApp.test.ts"]
+}
