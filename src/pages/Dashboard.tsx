@@ -50,21 +50,21 @@ export function Dashboard() {
             <h2 className="mt-2 text-2xl font-black sm:text-4xl">Bolão Futebol Inglês</h2>
             <p className="mt-2 text-sm text-slate-200">Última atualização: {formatarDataHora(data.ultimaAtualizacao)}</p>
           </div>
-          <div className="flex flex-wrap gap-2">
-            <Button variant="secondary" icon={<RefreshCw className="h-4 w-4" aria-hidden />} onClick={refetch}>
+          <div className="grid gap-2 sm:flex sm:flex-wrap">
+            <Button className="w-full sm:w-auto" variant="secondary" icon={<RefreshCw className="h-4 w-4" aria-hidden />} onClick={refetch}>
               Atualizar dados
             </Button>
             {!isAppInstalled ? (
               <Button
                 variant="secondary"
-                className="border-brand-200 bg-brand-50 text-brand-700 hover:bg-brand-100 focus:ring-brand-100"
+                className="w-full border-brand-200 bg-brand-50 text-brand-700 hover:bg-brand-100 focus:ring-brand-100 sm:w-auto"
                 icon={<Smartphone className="h-4 w-4" aria-hidden />}
                 onClick={openPwaInstallPrompt}
               >
                 Baixar app
               </Button>
             ) : null}
-            <Button variant="primary" icon={<Download className="h-4 w-4" aria-hidden />} onClick={() => gerarPdfRelatorioGeral(data)}>
+            <Button className="w-full sm:w-auto" variant="primary" icon={<Download className="h-4 w-4" aria-hidden />} onClick={() => gerarPdfRelatorioGeral(data)}>
               Relatório geral
             </Button>
           </div>
@@ -84,7 +84,7 @@ export function Dashboard() {
         <Podium ranking={data.ranking} />
 
         <Card>
-          <CardHeader className="flex items-center justify-between">
+          <CardHeader className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
             <h2 className="text-lg font-black text-slate-950">Top 5</h2>
             <Link to="/ranking" className="text-sm font-bold text-brand-600 hover:text-brand-700">
               Ver ranking completo
@@ -116,7 +116,7 @@ export function Dashboard() {
 
       <section className="grid gap-6 lg:grid-cols-2">
         <Card>
-          <CardHeader className="flex items-center justify-between">
+          <CardHeader className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
             <h2 className="text-lg font-black text-slate-950">Próximos jogos</h2>
             <Link to="/jogos" className="text-sm font-bold text-brand-600 hover:text-brand-700">
               Ver todos os palpites

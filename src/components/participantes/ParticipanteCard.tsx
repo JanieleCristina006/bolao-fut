@@ -14,12 +14,12 @@ export function ParticipanteCard({ participante }: ParticipanteCardProps) {
     <Card>
       <CardBody className="space-y-4">
         <div className="flex items-start justify-between gap-3">
-          <div>
+          <div className="min-w-0">
             <Badge tone={participante.posicao <= 3 ? "gold" : "gray"}>{participante.posicao}º lugar</Badge>
-            <h2 className="mt-3 text-lg font-black text-slate-950">{participante.nome}</h2>
+            <h2 className="mt-3 break-words text-lg font-black text-slate-950">{participante.nome}</h2>
             <p className="text-sm text-slate-500">{porcentagem(participante.aproveitamento)} de aproveitamento</p>
           </div>
-          <Badge tone={participante.pagamento === "pago" ? "green" : "yellow"}>
+          <Badge className="shrink-0" tone={participante.pagamento === "pago" ? "green" : "yellow"}>
             {participante.pagamento === "pago" ? <CheckCircle2 className="mr-1 h-3.5 w-3.5" aria-hidden /> : <Clock className="mr-1 h-3.5 w-3.5" aria-hidden />}
             {participante.pagamento}
           </Badge>

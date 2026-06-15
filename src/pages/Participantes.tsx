@@ -78,6 +78,7 @@ export function Participantes() {
         </Select>
         <Button
           variant="ghost"
+          className="w-full"
           icon={<RotateCcw className="h-4 w-4" aria-hidden />}
           onClick={() => {
             setBusca("");

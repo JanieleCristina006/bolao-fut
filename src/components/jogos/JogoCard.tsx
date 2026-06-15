@@ -43,7 +43,7 @@ export function JogoCard({ jogo, palpites, initiallyOpen = false, onPdf }: JogoC
   return (
     <Card className="overflow-hidden">
       <CardHeader className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-        <div>
+        <div className="min-w-0">
           <div className="flex flex-wrap items-center gap-2 text-sm text-slate-500">
             <Badge tone={jogo.status === "finalizado" ? "green" : "gray"}>{jogo.status}</Badge>
             <span>{jogo.rodada}</span>
@@ -55,19 +55,20 @@ export function JogoCard({ jogo, palpites, initiallyOpen = false, onPdf }: JogoC
               {formatarData(jogo.data)} às {jogo.horario}
             </span>
           </div>
-          <h2 className="mt-2 text-xl font-black text-slate-950">
+          <h2 className="mt-2 break-words text-xl font-black text-slate-950">
             {jogo.mandante} <span className="text-brand-600">x</span> {jogo.visitante}
           </h2>
           <p className="text-sm text-slate-500">
             {jogo.abreviacao} · Resultado: <strong className="text-slate-900">{jogo.resultado ?? "pendente"}</strong>
           </p>
         </div>
-        <div className="flex flex-wrap gap-2">
-          <Button variant="secondary" icon={<Download className="h-4 w-4" aria-hidden />} onClick={() => onPdf(jogo, palpitesOrdenados)}>
+        <div className="grid gap-2 sm:flex sm:flex-wrap lg:justify-end">
+          <Button className="w-full sm:w-auto" variant="secondary" icon={<Download className="h-4 w-4" aria-hidden />} onClick={() => onPdf(jogo, palpitesOrdenados)}>
             PDF do jogo
           </Button>
           <Button
             variant="ghost"
+            className="w-full sm:w-auto"
             icon={open ? <ChevronUp className="h-4 w-4" aria-hidden /> : <ChevronDown className="h-4 w-4" aria-hidden />}
             onClick={() => setOpen((current) => !current)}
             aria-expanded={open}
@@ -82,8 +83,8 @@ export function JogoCard({ jogo, palpites, initiallyOpen = false, onPdf }: JogoC
             {palpitesOrdenados.map((palpite) => (
               <div key={`${palpite.jogoId}-${palpite.participante}`} className={cn("rounded-lg border p-3", rowClass(palpite.tipo))}>
                 <div className="flex items-start justify-between gap-3">
-                  <strong className="text-sm text-slate-950">{palpite.participante}</strong>
-                  <Badge tone={tonePorTipo(palpite.tipo)}>{palpite.pontos} pts</Badge>
+                  <strong className="min-w-0 break-words text-sm text-slate-950">{palpite.participante}</strong>
+                  <Badge className="shrink-0" tone={tonePorTipo(palpite.tipo)}>{palpite.pontos} pts</Badge>
                 </div>
                 <p className="mt-1 text-sm text-slate-700">
                   Palpite: <strong>{palpite.palpite}</strong>

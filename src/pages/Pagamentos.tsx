@@ -99,11 +99,11 @@ export function Pagamentos() {
           <h2 className="text-2xl font-black text-slate-950">Pagamentos</h2>
           <p className="text-sm font-bold text-brand-600">{PIX_INFO.texto}</p>
         </div>
-        <div className="flex flex-wrap gap-2 no-print">
-          <Button variant="secondary" icon={<FileDown className="h-4 w-4" aria-hidden />} onClick={() => exportarCsv(filtrado)}>
+        <div className="grid gap-2 no-print sm:flex sm:flex-wrap lg:justify-end">
+          <Button className="w-full sm:w-auto" variant="secondary" icon={<FileDown className="h-4 w-4" aria-hidden />} onClick={() => exportarCsv(filtrado)}>
             Exportar CSV
           </Button>
-          <Button icon={<Download className="h-4 w-4" aria-hidden />} onClick={() => gerarPdfPagamentos(filtrado)}>
+          <Button className="w-full sm:w-auto" icon={<Download className="h-4 w-4" aria-hidden />} onClick={() => gerarPdfPagamentos(filtrado)}>
             Exportar pagamentos em PDF
           </Button>
         </div>
@@ -146,6 +146,7 @@ export function Pagamentos() {
         />
         <Button
           variant="ghost"
+          className="w-full"
           icon={<RotateCcw className="h-4 w-4" aria-hidden />}
           onClick={() => {
             setBusca("");

@@ -2,6 +2,7 @@ export const OPEN_PWA_INSTALL_PROMPT_EVENT = "bolao:open-pwa-install-prompt";
 export const PWA_INSTALL_STATE_CHANGE_EVENT = "bolao:pwa-install-state-change";
 
 const PWA_INSTALLED_KEY = "bolao-pwa-installed";
+const PWA_INSTALL_PROMPT_SEEN_KEY = "bolao-pwa-install-prompt-seen";
 
 function isStandaloneMode(): boolean {
   if (typeof window === "undefined") return false;
@@ -14,6 +15,8 @@ function isStandaloneMode(): boolean {
 }
 
 function getStorage(): Storage | null {
+  if (typeof window === "undefined") return null;
+
   try {
     return window.localStorage;
   } catch {
@@ -29,6 +32,14 @@ export function isPwaInstalled(): boolean {
 export function markPwaInstalled(): void {
   getStorage()?.setItem(PWA_INSTALLED_KEY, "true");
   window.dispatchEvent(new Event(PWA_INSTALL_STATE_CHANGE_EVENT));
+}
+
+export function hasSeenPwaInstallPrompt(): boolean {
+  return getStorage()?.getItem(PWA_INSTALL_PROMPT_SEEN_KEY) === "true";
+}
+
+export function markPwaInstallPromptSeen(): void {
+  getStorage()?.setItem(PWA_INSTALL_PROMPT_SEEN_KEY, "true");
 }
 
 export function openPwaInstallPrompt(): void {

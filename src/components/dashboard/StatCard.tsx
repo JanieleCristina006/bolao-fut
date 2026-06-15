@@ -47,9 +47,9 @@ export function StatCard({ label, value, icon, tone = "rose" }: StatCardProps) {
   return (
     <Card className={styles.card}>
       <CardBody className="flex items-center justify-between gap-4">
-        <div>
+        <div className="min-w-0">
           <p className="text-sm font-semibold text-slate-500">{label}</p>
-          <strong className={`mt-1 block text-2xl font-black ${styles.value}`}>{value}</strong>
+          <strong className={`mt-1 block break-words text-xl font-black sm:text-2xl ${styles.value}`}>{value}</strong>
         </div>
         <span className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-lg ring-1 ${styles.icon}`}>{icon}</span>
       </CardBody>

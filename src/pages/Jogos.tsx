@@ -93,19 +93,20 @@ export function Jogos() {
           <h2 className="text-2xl font-black text-slate-950">Jogos e palpites</h2>
           <p className="text-sm text-slate-500">Pontuação calculada no frontend a partir do resultado oficial.</p>
         </div>
-        <div className="flex flex-wrap gap-2 no-print">
-          <Button variant="secondary" icon={<Printer className="h-4 w-4" aria-hidden />} onClick={() => window.print()}>
+        <div className="grid gap-2 no-print sm:flex sm:flex-wrap lg:justify-end">
+          <Button className="w-full sm:w-auto" variant="secondary" icon={<Printer className="h-4 w-4" aria-hidden />} onClick={() => window.print()}>
             Imprimir palpites
           </Button>
           <Button
             variant="secondary"
+            className="w-full sm:w-auto"
             icon={<Download className="h-4 w-4" aria-hidden />}
             disabled={!participanteDebounced}
             onClick={() => gerarPdfPalpitesParticipante(participanteDebounced, jogosFiltrados, palpitesFiltrados)}
           >
             PDF participante
           </Button>
-          <Button icon={<Download className="h-4 w-4" aria-hidden />} onClick={() => gerarPdfPalpitesFiltrados(jogosFiltrados, palpitesFiltrados)}>
+          <Button className="w-full sm:w-auto" icon={<Download className="h-4 w-4" aria-hidden />} onClick={() => gerarPdfPalpitesFiltrados(jogosFiltrados, palpitesFiltrados)}>
             PDF filtrado
           </Button>
         </div>
@@ -151,6 +152,7 @@ export function Jogos() {
         </Select>
         <Button
           variant="ghost"
+          className="w-full"
           icon={<RotateCcw className="h-4 w-4" aria-hidden />}
           onClick={() => setFiltros({ participante: "", dia: "", rodada: "", jogo: "", selecao: "", status: "todos", resultado: "todos", tipo: "todos" })}
         >

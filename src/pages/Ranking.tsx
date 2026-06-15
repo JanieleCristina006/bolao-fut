@@ -65,14 +65,14 @@ export function Ranking() {
           <h2 className="text-2xl font-black text-slate-950">Ranking</h2>
           <p className="text-sm text-slate-500">Desempate por cravadas e ordem original da planilha.</p>
         </div>
-        <div className="flex flex-wrap gap-2 no-print">
-          <Button variant="secondary" icon={<RefreshCw className="h-4 w-4" aria-hidden />} onClick={refetch}>
+        <div className="grid gap-2 no-print sm:flex sm:flex-wrap lg:justify-end">
+          <Button className="w-full sm:w-auto" variant="secondary" icon={<RefreshCw className="h-4 w-4" aria-hidden />} onClick={refetch}>
             Atualizar
           </Button>
-          <Button variant="secondary" icon={<Printer className="h-4 w-4" aria-hidden />} onClick={() => window.print()}>
+          <Button className="w-full sm:w-auto" variant="secondary" icon={<Printer className="h-4 w-4" aria-hidden />} onClick={() => window.print()}>
             Imprimir ranking
           </Button>
-          <Button icon={<Download className="h-4 w-4" aria-hidden />} onClick={() => gerarPdfRanking(filtrado)}>
+          <Button className="w-full sm:w-auto" icon={<Download className="h-4 w-4" aria-hidden />} onClick={() => gerarPdfRanking(filtrado)}>
             Baixar ranking em PDF
           </Button>
         </div>
@@ -95,6 +95,7 @@ export function Ranking() {
         </Select>
         <Button
           variant="ghost"
+          className="w-full"
           icon={<RotateCcw className="h-4 w-4" aria-hidden />}
           onClick={() => {
             setBusca("");

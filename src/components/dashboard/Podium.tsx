@@ -30,7 +30,7 @@ export function Podium({ ranking }: PodiumProps) {
               <Medal className={`h-7 w-7 ${medalStyles[index]}`} aria-hidden />
               <Badge tone={index === 0 ? "gold" : index === 1 ? "silver" : "bronze"}>#{item.posicao}</Badge>
             </div>
-            <h3 className="mt-4 truncate text-base font-black text-slate-950">{item.participante}</h3>
+            <h3 className="mt-4 break-words text-base font-black text-slate-950 sm:truncate">{item.participante}</h3>
             <p className="text-sm text-slate-600">
               {item.pontos} pontos - {item.cravadas} cravadas
             </p>

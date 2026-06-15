@@ -36,7 +36,7 @@ Copie `.env.example` para `.env` e configure:
 # Fonte principal em tempo real via Google Apps Script.
 VITE_GOOGLE_SCRIPT_API_URL=/api/sheets
 
-# URL real do Apps Script usada pelo proxy local/Vercel.
+# URL real do Apps Script usada pelo proxy local/Netlify/Vercel.
 GOOGLE_SCRIPT_API_URL=https://script.google.com/macros/s/SEU_ID/exec
 
 # Fallback local somente leitura.
@@ -216,6 +216,19 @@ Também há botões de impressão nas páginas de Ranking e Jogos.
 7. Configure `GOOGLE_SCRIPT_API_URL` com a URL `/exec` do Apps Script nas variáveis de ambiente da Vercel.
 8. Configure `VITE_EXCEL_FILE_URL` apenas se quiser publicar usando o Excel local somente leitura.
 9. Publique.
+
+## Publicar na Netlify
+
+O projeto inclui `netlify.toml` e a Function `netlify/functions/sheets.js`. Na Netlify, `/api/sheets` é reescrito para essa Function, que chama o Google Apps Script pelo servidor e evita CORS.
+
+1. Envie o projeto para um repositório Git.
+2. Crie um projeto na Netlify.
+3. Build command: `npm run build`.
+4. Publish directory: `dist`.
+5. Functions directory: `netlify/functions`.
+6. Configure `GOOGLE_SCRIPT_API_URL` com a URL `/exec` do Apps Script nas variáveis de ambiente da Netlify.
+7. Não precisa configurar `VITE_GOOGLE_SCRIPT_API_URL` na Netlify, porque `netlify.toml` já define `/api/sheets` no build.
+8. Publique novamente depois de alterar as variáveis.
 
 ## PWA
 

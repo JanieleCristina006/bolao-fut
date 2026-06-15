@@ -43,7 +43,7 @@ export function ParticipanteDetalhes() {
           <h2 className="mt-3 text-2xl font-black text-slate-950">{participante.nome}</h2>
           <p className="text-sm text-slate-500">Histórico completo de palpites e pagamento.</p>
         </div>
-        <Button icon={<Download className="h-4 w-4" aria-hidden />} onClick={() => gerarPdfParticipante(participante, jogos)}>
+        <Button className="w-full sm:w-auto" icon={<Download className="h-4 w-4" aria-hidden />} onClick={() => gerarPdfParticipante(participante, jogos)}>
           Baixar relatório individual em PDF
         </Button>
       </div>
@@ -79,7 +79,37 @@ export function ParticipanteDetalhes() {
         <CardHeader>
           <h2 className="text-lg font-black text-slate-950">Histórico de palpites</h2>
         </CardHeader>
-        <div className="overflow-x-auto">
+        <div className="divide-y divide-slate-100 bg-white md:hidden">
+          {jogos.map((jogo) => {
+            const palpite = participante.palpites.find((item) => item.jogoId === jogo.id);
+            return (
+              <article key={jogo.id} className="space-y-3 p-4">
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <h3 className="font-black text-slate-950">{jogo.abreviacao}</h3>
+                    <p className="text-sm text-slate-500">
+                      {formatarData(jogo.data)} {jogo.horario}
+                    </p>
+                  </div>
+                  <Badge tone={palpite && palpite.pontos > 0 ? "green" : "gray"}>{palpite?.pontos ?? 0} pts</Badge>
+                </div>
+
+                <dl className="grid grid-cols-2 gap-2 text-sm">
+                  <div className="rounded-lg bg-slate-100 p-3">
+                    <dt className="text-xs font-semibold text-slate-500">Resultado</dt>
+                    <dd className="mt-1 font-bold text-slate-950">{jogo.resultado ?? "pendente"}</dd>
+                  </div>
+                  <div className="rounded-lg bg-slate-100 p-3">
+                    <dt className="text-xs font-semibold text-slate-500">Palpite</dt>
+                    <dd className="mt-1 font-bold text-slate-950">{palpite?.palpite ?? "-"}</dd>
+                  </div>
+                </dl>
+              </article>
+            );
+          })}
+        </div>
+
+        <div className="hidden overflow-x-auto md:block">
           <table className="min-w-full divide-y divide-slate-200 text-left text-sm">
             <thead className="bg-slate-950 text-white">
               <tr>

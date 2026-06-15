@@ -1,6 +1,13 @@
 import { useEffect, useState } from "react";
 import { Download, MonitorDown, Smartphone, X } from "lucide-react";
-import { isPwaInstalled, markPwaInstalled, OPEN_PWA_INSTALL_PROMPT_EVENT, PWA_INSTALL_STATE_CHANGE_EVENT } from "../../pwa";
+import {
+  hasSeenPwaInstallPrompt,
+  isPwaInstalled,
+  markPwaInstalled,
+  markPwaInstallPromptSeen,
+  OPEN_PWA_INSTALL_PROMPT_EVENT,
+  PWA_INSTALL_STATE_CHANGE_EVENT
+} from "../../pwa";
 import { Button } from "../ui/Button";
 
 interface BeforeInstallPromptEvent extends Event {
@@ -28,7 +35,10 @@ export function InstallPwaPrompt() {
       if (isPwaInstalled()) return;
       event.preventDefault();
       setInstallPrompt(event as BeforeInstallPromptEvent);
-      autoOpenTimer = window.setTimeout(() => setIsOpen(true), 900);
+      if (!hasSeenPwaInstallPrompt()) {
+        markPwaInstallPromptSeen();
+        autoOpenTimer = window.setTimeout(() => setIsOpen(true), 900);
+      }
     };
     const handleOpenInstallPrompt = () => {
       if (!isPwaInstalled()) setIsOpen(true);
