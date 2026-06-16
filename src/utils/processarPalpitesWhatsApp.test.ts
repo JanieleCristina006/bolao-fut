@@ -19,7 +19,7 @@ function participante(nome: string): Participante {
   };
 }
 
-function jogo(id: string, data: string, mandante: string, visitante: string): Jogo {
+function jogo(id: string, data: string, mandante: string, visitante: string, abreviacao?: string): Jogo {
   return {
     id,
     dia: "Dia 1",
@@ -28,7 +28,7 @@ function jogo(id: string, data: string, mandante: string, visitante: string): Jo
     horario: "12:00",
     mandante,
     visitante,
-    abreviacao: `${mandante.slice(0, 3).toUpperCase()} x ${visitante.slice(0, 3).toUpperCase()}`,
+    abreviacao: abreviacao ?? `${mandante.slice(0, 3).toUpperCase()} x ${visitante.slice(0, 3).toUpperCase()}`,
     resultado: null,
     status: "agendado"
   };
@@ -38,6 +38,7 @@ const participantes = [
   participante("Karolyne Azola"),
   participante("Victor Guimarães"),
   participante("Brenno Vergara"),
+  participante("Maria Clara Alonso"),
   participante("José Ávila")
 ];
 
@@ -47,7 +48,12 @@ const jogos = [
   jogo("jogo-ara-uru", "2026-06-15", "Arábia Saudita", "Uruguai"),
   jogo("jogo-ira-nzl", "2026-06-15", "Irã", "Nova Zelândia"),
   jogo("jogo-coreia-sul", "2026-06-16", "Coreia do Sul", "Japão"),
-  jogo("jogo-coreia-norte", "2026-06-16", "Coreia do Norte", "Japão")
+  jogo("jogo-coreia-norte", "2026-06-16", "Coreia do Norte", "Japão"),
+  jogo("jogo-fra-sen", "2026-06-16", "FRA", "SEN", "FRA x SEN"),
+  jogo("jogo-irq-nor", "2026-06-16", "IRQ", "NOR", "IRQ x NOR"),
+  jogo("jogo-arg-agl", "2026-06-16", "ARG", "AGL", "ARG x AGL"),
+  jogo("jogo-aus-jor", "2026-06-16", "\u00C1US", "JOR", "\u00C1US x JOR"),
+  jogo("jogo-australia-jor", "2026-06-16", "Australia", "JOR", "AUS x JOR")
 ];
 
 const palpiteExistente: Palpite = {
@@ -198,6 +204,29 @@ const tests: Array<[string, () => void]> = [
     () => {
       const item = primeiroPalpite(`JOGO DIA 15/06\n[15/06/2026, 08:00] Karolyne Azola: Meus palpites (Karolyne Azola)\n[15/06/2026, 08:01] Karolyne Azola: Espanha 1x0 Cabo Verde`);
       assert(item.status === "valido", "Prefixos do WhatsApp deveriam ser removidos.");
+    }
+  ],
+  [
+    "mensagem com nomes completos deve bater com siglas da planilha",
+    () => {
+      const resultado = processar(`JOGO DIA 16/06 - TER\u00C7A-FEIRA- AMANH\u00C3
+
+Meus palpites (Maria Clara Alonso)
+
+Fran\u00E7a 3 x 0 Senagal
+
+Iraque 0 x 2 Noruega
+
+Argentina 3 x 1 Arg\u00E9lia
+
+\u00C1ustria 1 x 0 Jord\u00E2nia`);
+
+      const importaveis = resultado.itens.filter((item) => item.importavel);
+      assert(importaveis.length === 4, "Deveria encontrar os quatro jogos enviados.");
+      assert(importaveis.some((item) => item.jogoId === "jogo-fra-sen"), "Deveria casar Franca/Senagal com FRA x SEN.");
+      assert(importaveis.some((item) => item.jogoId === "jogo-irq-nor"), "Deveria casar Iraque/Noruega com IRQ x NOR.");
+      assert(importaveis.some((item) => item.jogoId === "jogo-arg-agl"), "Deveria casar Argentina/Argelia com ARG x AGL.");
+      assert(importaveis.some((item) => item.jogoId === "jogo-aus-jor"), "Deveria casar Austria/Jordania com AUS x JOR.");
     }
   ]
 ];

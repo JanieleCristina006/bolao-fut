@@ -91,13 +91,18 @@ google-apps-script/
 
 ```text
 ADMIN_TOKEN=uma-senha-segura
+SPREADSHEET_ID=id-da-planilha-do-google
 ```
+
+O `SPREADSHEET_ID` e o trecho da URL da planilha entre `/d/` e `/edit`.
 
 5. Clique em `Implantar > Nova implantação`.
 6. Tipo: `Aplicativo da Web`.
 7. Executar como: sua conta.
 8. Quem tem acesso: conforme sua necessidade, normalmente `Qualquer pessoa com o link`.
 9. Copie a URL `/exec` e coloque em `GOOGLE_SCRIPT_API_URL`. Mantenha `VITE_GOOGLE_SCRIPT_API_URL=/api/sheets`.
+
+Quando alterar o `Code.gs`, nao basta salvar: va em `Implantar > Gerenciar implantacoes`, clique no lapis, selecione `Nova versao` e implante novamente. Se a implantacao antiga continuar ativa, o frontend pode receber sucesso de uma versao anterior do script.
 
 O script procura as abas:
 

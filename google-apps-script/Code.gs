@@ -111,6 +111,15 @@ function doOptions() {
   return json_({ ok: true });
 }
 
+function getSpreadsheet_() {
+  var spreadsheetId = String(PropertiesService.getScriptProperties().getProperty("SPREADSHEET_ID") || "").trim();
+  if (spreadsheetId) return SpreadsheetApp.openById(spreadsheetId);
+
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  if (!ss) throw new Error("Planilha nao encontrada. Configure SPREADSHEET_ID nas propriedades do script.");
+  return ss;
+}
+
 function handleGet_(action, params) {
   var snapshot = readSnapshot_();
 
@@ -126,7 +135,7 @@ function handleGet_(action, params) {
 }
 
 function readSnapshot_() {
-  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var ss = getSpreadsheet_();
   var parsedPalpites = readPalpitesSheet_(ss);
   var jogosTabela = readJogosTabela_(ss);
   var jogos = mergeJogos_(parsedPalpites.jogos, jogosTabela);
@@ -303,10 +312,12 @@ function readPalpitesSheet_(ss) {
       var dayInfo = parseDay_(findNearbyText_(values, row, col, ["dia"], 5, 6)) || parseDay_(findLeftDay_(values, row, col)) || { label: "Dia", date: "" };
       var resultado = resultadoInfo ? formatScore_(resultadoInfo.value) : null;
       var id = slug_(dayInfo.label + "-" + gameInfo.abreviacao);
+      var idAliases = uniqueStrings_([id, slug_(dayInfo.label + "-" + gameText)]);
 
       if (!jogosById[id]) {
         jogosById[id] = {
           id: id,
+          aliases: idAliases,
           dia: dayInfo.label,
           rodada: dayInfo.label,
           data: dayInfo.date || findNearbyDate_(values, row, col) || "",
@@ -317,12 +328,16 @@ function readPalpitesSheet_(ss) {
           resultado: resultado,
           status: resultado ? "finalizado" : "agendado"
         };
-        index.jogos[id] = {
-          headerRow: row + 1,
-          headerCol: col + 1,
-          resultadoRow: resultadoInfo ? resultadoInfo.row + 1 : null,
-          resultadoCol: resultadoInfo ? col + 1 : null
-        };
+        idAliases.forEach(function (alias) {
+          index.jogos[alias] = {
+            id: id,
+            alias: alias,
+            headerRow: row + 1,
+            headerCol: col + 1,
+            resultadoRow: resultadoInfo ? resultadoInfo.row + 1 : null,
+            resultadoCol: resultadoInfo ? col + 1 : null
+          };
+        });
       }
 
       var stopRow = resultadoInfo ? resultadoInfo.row : Math.min(values.length - 1, row + 35);
@@ -330,10 +345,14 @@ function readPalpitesSheet_(ss) {
         var participante = participantCol >= 0 ? normalizarNome_(values[participantRow][participantCol]) : "";
         if (!participante || shouldSkipParticipantName_(participante)) continue;
 
-        index.palpites[id + "::" + normalizarTexto_(participante)] = {
-          row: participantRow + 1,
-          col: col + 1
-        };
+        idAliases.forEach(function (alias) {
+          index.palpites[alias + "::" + normalizarTexto_(participante)] = {
+            id: id,
+            alias: alias,
+            row: participantRow + 1,
+            col: col + 1
+          };
+        });
 
         var palpite = formatScore_(values[participantRow][col]);
         if (!palpite) continue;
@@ -499,7 +518,7 @@ function importarPalpitesEmLote_(payload) {
   if (!Array.isArray(itens)) throw new Error("Lista de palpites obrigatória.");
   if (!itens.length) throw new Error("Nenhum palpite enviado para importação.");
 
-  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var ss = getSpreadsheet_();
   var sheet = findSheet_(ss, SHEET_NAMES.palpites, true);
   var parsed = readPalpitesSheet_(ss);
   var values = sheet.getDataRange().getValues();
@@ -521,10 +540,10 @@ function importarPalpitesEmLote_(payload) {
       if (["substituir", "manter", "ignorar"].indexOf(decisao) < 0) throw new Error("Decisão de importação inválida.");
       if (!isValidScoreNumber_(golsCasa) || !isValidScoreNumber_(golsFora)) throw new Error("Placar inválido.");
 
-      var jogo = findJogoById_(parsed.jogos, jogoId);
+      var jogo = findJogoById_(parsed.jogos, jogoId) || findJogoByTimes_(parsed.jogos, item);
       if (!jogo) throw new Error("Jogo não encontrado na aba de palpites.");
 
-      var target = parsed.index.palpites[jogoId + "::" + normalizarTexto_(participante)];
+      var target = findPalpiteTarget_(parsed, item, participante, jogo);
       if (!target) throw new Error("Célula de palpite não encontrada para participante e jogo.");
 
       var novoPalpite = golsCasa + "x" + golsFora;
@@ -609,7 +628,94 @@ function isValidScoreNumber_(value) {
 }
 
 function findJogoById_(jogos, jogoId) {
-  return jogos.find(function (jogo) { return jogo.id === jogoId; }) || null;
+  return jogos.find(function (jogo) {
+    return jogo.id === jogoId || (jogo.aliases || []).indexOf(jogoId) >= 0;
+  }) || null;
+}
+
+function findPalpiteTarget_(parsed, payload, participante, jogo) {
+  var participanteKey = normalizarTexto_(participante);
+  var ids = uniqueStrings_([String(payload.jogoId || ""), jogo && jogo.id].concat((jogo && jogo.aliases) || []));
+
+  for (var index = 0; index < ids.length; index += 1) {
+    var target = parsed.index.palpites[ids[index] + "::" + participanteKey];
+    if (target) return target;
+  }
+
+  return null;
+}
+
+function findJogoByTimes_(jogos, payload) {
+  var timeCasa = normalizarNome_(payload.timeCasa);
+  var timeFora = normalizarNome_(payload.timeFora);
+  if (!timeCasa || !timeFora) return null;
+
+  var matches = jogos.filter(function (jogo) {
+    var parts = splitGameAbreviacao_(jogo.abreviacao);
+    return teamsEquivalent_(timeCasa, jogo.mandante, parts.home) && teamsEquivalent_(timeFora, jogo.visitante, parts.away);
+  });
+
+  return matches.length === 1 ? matches[0] : null;
+}
+
+function splitGameAbreviacao_(abreviacao) {
+  var parts = String(abreviacao || "").split(/\s*(?:x|-)\s*/i);
+  return {
+    home: normalizarNome_(parts[0]),
+    away: normalizarNome_(parts[1])
+  };
+}
+
+function teamsEquivalent_(left, right, rightSigla) {
+  var leftAliases = teamAliases_(left);
+  var rightAliases = teamAliases_(right);
+
+  teamAliases_(rightSigla).forEach(function (alias) {
+    rightAliases.push(alias);
+  });
+
+  rightAliases = uniqueStrings_(rightAliases);
+  return leftAliases.some(function (alias) {
+    return rightAliases.indexOf(alias) >= 0;
+  });
+}
+
+function teamAliases_(value) {
+  var raw = normalizarNome_(value);
+  var key = isAustriaSheetCode_(raw) ? "austria" : normalizarTexto_(raw);
+  var aliases = [key];
+
+  Object.keys(TEAM_NAMES).forEach(function (sigla) {
+    var siglaKey = isAustriaSheetCode_(sigla) ? "austria" : normalizarTexto_(sigla);
+    var nomeKey = normalizarTexto_(TEAM_NAMES[sigla]);
+    if (key === siglaKey || key === nomeKey) {
+      aliases.push(siglaKey);
+      aliases.push(nomeKey);
+    }
+  });
+
+  if (key === "senagal") {
+    aliases.push("senegal");
+    aliases.push("sen");
+  }
+
+  return uniqueStrings_(aliases);
+}
+
+function isAustriaSheetCode_(value) {
+  return /^\s*\u00C1US\s*$/i.test(String(value || ""));
+}
+
+function uniqueStrings_(items) {
+  var seen = {};
+  var result = [];
+  items.forEach(function (item) {
+    var value = String(item || "");
+    if (!value || seen[value]) return;
+    seen[value] = true;
+    result.push(value);
+  });
+  return result;
 }
 
 function writePalpiteUpdates_(sheet, updates) {
@@ -646,7 +752,7 @@ function atualizarPagamento_(payload) {
   if (!participante) throw new Error("Participante obrigatório.");
   if (typeof payload.pago !== "boolean") throw new Error("Campo pago deve ser booleano.");
 
-  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var ss = getSpreadsheet_();
   var sheet = findSheet_(ss, SHEET_NAMES.pagamento, true);
   var values = sheet.getDataRange().getValues();
   var headerInfo = detectHeader_(values, ["participante", "nome", "pix", "pagou", "data"]);
@@ -673,7 +779,7 @@ function atualizarResultado_(payload) {
   if (!jogoId) throw new Error("jogoId obrigatório.");
   if (!resultado) throw new Error("Resultado inválido. Use formato 2x1.");
 
-  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var ss = getSpreadsheet_();
   var parsed = readPalpitesSheet_(ss);
   var target = parsed.index.jogos[jogoId];
   if (!target || !target.resultadoRow || !target.resultadoCol) {
@@ -690,9 +796,12 @@ function atualizarPalpite_(payload) {
   var palpite = formatScore_(payload.palpite);
   if (!participante || !jogoId || !palpite) throw new Error("Participante, jogoId e palpite válido são obrigatórios.");
 
-  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var ss = getSpreadsheet_();
   var parsed = readPalpitesSheet_(ss);
-  var target = parsed.index.palpites[jogoId + "::" + normalizarTexto_(participante)];
+  var jogo = findJogoById_(parsed.jogos, jogoId) || findJogoByTimes_(parsed.jogos, payload);
+  if (!jogo) throw new Error("Jogo nao encontrado na aba de palpites.");
+
+  var target = findPalpiteTarget_(parsed, payload, participante, jogo);
   if (!target) throw new Error("Célula de palpite não encontrada.");
 
   var sheet = findSheet_(ss, SHEET_NAMES.palpites, true);

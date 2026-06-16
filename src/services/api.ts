@@ -278,6 +278,89 @@ async function post<T>(payload: Record<string, unknown>): Promise<T> {
   }
 }
 
+function getErrorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : "Erro desconhecido.";
+}
+
+function isInvalidPostActionError(error: unknown): boolean {
+  const normalized = getErrorMessage(error)
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase();
+
+  return normalized.includes("acao post invalida");
+}
+
+async function importarPalpitesIndividualmente(payload: ImportarPalpitesEmLotePayload): Promise<ImportarPalpitesEmLoteResponse> {
+  const detalhes: ImportarPalpitesEmLoteResponse["detalhes"] = [];
+  const erros: string[] = [];
+  let importados = 0;
+  let ignorados = 0;
+
+  for (const item of payload.palpites) {
+    const jogo = `${item.timeCasa} x ${item.timeFora}`;
+    const palpite = `${item.golsCasa}x${item.golsFora}`;
+
+    if (item.decisao === "ignorar" || item.decisao === "manter") {
+      ignorados += 1;
+      detalhes.push({
+        participante: item.participante,
+        jogo,
+        status: item.decisao === "manter" ? "mantido" : "ignorado",
+        novo: palpite
+      });
+      continue;
+    }
+
+    try {
+      await post<ApiMessage>({
+        action: "atualizarPalpite",
+        adminToken: payload.adminToken,
+        participante: item.participante,
+        jogoId: item.jogoId,
+        timeCasa: item.timeCasa,
+        timeFora: item.timeFora,
+        palpite
+      });
+
+      importados += 1;
+      detalhes.push({
+        participante: item.participante,
+        jogo,
+        status: "importado",
+        novo: palpite
+      });
+    } catch (error) {
+      const message = `${item.participante} - ${jogo}: ${getErrorMessage(error)}`;
+      erros.push(message);
+      detalhes.push({
+        participante: item.participante,
+        jogo,
+        status: "erro",
+        novo: palpite,
+        erro: message
+      });
+    }
+  }
+
+  if (!importados && erros.length > 0) {
+    throw new Error(erros[0]);
+  }
+
+  const prefix = erros.length > 0 ? "Importação parcial em modo de compatibilidade" : "Importação concluída em modo de compatibilidade";
+  const errorSuffix = erros.length > 0 ? ` ${erros.length} falharam. Primeiro erro: ${erros[0]}` : "";
+
+  return {
+    ok: erros.length === 0,
+    message: `${prefix}: ${importados} palpites enviados, ${ignorados} ignorados.${errorSuffix}`,
+    importados,
+    atualizados: 0,
+    ignorados,
+    erros,
+    detalhes
+  };
+}
+
 function mockGet<T>(action: string): Promise<T> {
   const [baseAction, queryString] = action.split("?");
   const params = new URLSearchParams(queryString ?? "");
@@ -394,6 +477,12 @@ export const api = {
     post<ApiMessage>({ action: "atualizarResultado", ...payload }),
   atualizarPalpite: (payload: AtualizarPalpitePayload) =>
     post<ApiMessage>({ action: "atualizarPalpite", ...payload }),
-  importarPalpitesEmLote: (payload: ImportarPalpitesEmLotePayload) =>
-    post<ImportarPalpitesEmLoteResponse>({ action: "importarPalpitesEmLote", ...payload })
+  importarPalpitesEmLote: async (payload: ImportarPalpitesEmLotePayload) => {
+    try {
+      return await post<ImportarPalpitesEmLoteResponse>({ action: "importarPalpitesEmLote", ...payload });
+    } catch (error) {
+      if (!isInvalidPostActionError(error)) throw error;
+      return importarPalpitesIndividualmente(payload);
+    }
+  }
 };

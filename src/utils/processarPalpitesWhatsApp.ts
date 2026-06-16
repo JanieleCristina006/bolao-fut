@@ -35,6 +35,56 @@ const SCORE_PATTERN = "(\\d{1,2})\\s*(?:[xX]|-|a)\\s*(\\d{1,2})";
 const SCORE_REGEX = new RegExp(SCORE_PATTERN, "i");
 const PALPITE_REGEX = new RegExp(`^(.+?)\\s+${SCORE_PATTERN}\\s+(.+)$`, "i");
 const PARTICIPANTE_REGEX = /meus\s+palpites\s*\(([^)]+)\)/i;
+const TIME_ALIASES = [
+  ["africa do sul", "afs"],
+  ["argelia", "agl", "alg"],
+  ["alemanha", "ale"],
+  ["arabia saudita", "ara"],
+  ["argentina", "arg"],
+  ["australia", "aus"],
+  ["austria", "aut"],
+  ["belgica", "bel"],
+  ["bosnia", "bos"],
+  ["brasil", "bra"],
+  ["cabo verde", "cab"],
+  ["canada", "can"],
+  ["catar", "cat"],
+  ["colombia", "col"],
+  ["coreia do sul", "cor"],
+  ["costa do marfim", "com"],
+  ["croacia", "cro"],
+  ["curacao", "cur"],
+  ["egito", "egi"],
+  ["equador", "equ"],
+  ["escocia", "esc"],
+  ["espanha", "esp"],
+  ["estados unidos", "eua"],
+  ["franca", "fra"],
+  ["gana", "gan"],
+  ["haiti", "hai"],
+  ["holanda", "hol"],
+  ["inglaterra", "ing"],
+  ["ira", "ira"],
+  ["iraque", "irq"],
+  ["japao", "jap"],
+  ["jordania", "jor"],
+  ["marrocos", "mar"],
+  ["mexico", "mex"],
+  ["noruega", "nor"],
+  ["nova zelandia", "nzl"],
+  ["panama", "pan"],
+  ["paraguai", "par"],
+  ["portugal", "por"],
+  ["rd congo", "rdc", "republica democratica do congo"],
+  ["senegal", "sen", "senagal"],
+  ["suecia", "sue"],
+  ["suica", "sui"],
+  ["tchequia", "tch", "republica tcheca"],
+  ["tunisia", "tun"],
+  ["turquia", "tur"],
+  ["uruguai", "uru"],
+  ["uzbequistao", "uzb"]
+].map((aliases) => aliases.map((alias) => normalizarChave(alias)));
 
 function pad2(valor: string | number): string {
   return String(valor).padStart(2, "0");
@@ -105,17 +155,67 @@ function dataCompativel(jogo: Jogo, data: string | null): boolean {
   return dataJogo === data;
 }
 
+function ehSiglaAustria(valor: string | undefined): boolean {
+  return /^\s*\u00C1US\s*$/i.test(String(valor ?? ""));
+}
+
+function aliasesDoTime(nome: string, sigla?: string): Set<string> {
+  const nomeChave = ehSiglaAustria(nome) ? "austria" : normalizarChave(nome);
+  const siglaChave = ehSiglaAustria(sigla) ? "austria" : normalizarChave(sigla);
+  const chaves = new Set([nomeChave]);
+
+  TIME_ALIASES.forEach((aliases) => {
+    if (aliases.includes(nomeChave)) {
+      aliases.forEach((alias) => chaves.add(alias));
+    }
+  });
+
+  if (siglaChave && nomeChave.length <= 3) {
+    chaves.add(siglaChave);
+    TIME_ALIASES.forEach((aliases) => {
+      if (aliases.includes(siglaChave)) {
+        aliases.forEach((alias) => chaves.add(alias));
+      }
+    });
+  }
+
+  chaves.delete("");
+  return chaves;
+}
+
+function siglasDaAbreviacao(abreviacao: string): [string, string] {
+  const [casa = "", fora = ""] = abreviacao.split(/\s*(?:x|-)\s*/i).map(limparEspacos);
+  return [casa, fora];
+}
+
+function timesEquivalentes(timePalpite: string, timeJogo: string, siglaJogo?: string): boolean {
+  const aliasesPalpite = aliasesDoTime(timePalpite);
+  const aliasesJogo = aliasesDoTime(timeJogo, siglaJogo);
+  return [...aliasesPalpite].some((alias) => aliasesJogo.has(alias));
+}
+
+function jogoEquivalente(palpite: PalpiteLinha, jogo: Jogo, invertido = false): boolean {
+  const [siglaCasa, siglaFora] = siglasDaAbreviacao(jogo.abreviacao);
+  const casaJogo = invertido ? jogo.visitante : jogo.mandante;
+  const foraJogo = invertido ? jogo.mandante : jogo.visitante;
+  const siglaCasaJogo = invertido ? siglaFora : siglaCasa;
+  const siglaForaJogo = invertido ? siglaCasa : siglaFora;
+
+  return (
+    timesEquivalentes(palpite.timeCasa, casaJogo, siglaCasaJogo) &&
+    timesEquivalentes(palpite.timeFora, foraJogo, siglaForaJogo)
+  );
+}
+
 function encontrarJogo(palpite: PalpiteLinha, data: string | null, jogos: Jogo[]): ResultadoJogo {
-  const casa = normalizarChave(palpite.timeCasa);
-  const fora = normalizarChave(palpite.timeFora);
-  const diretos = jogos.filter((jogo) => normalizarChave(jogo.mandante) === casa && normalizarChave(jogo.visitante) === fora);
+  const diretos = jogos.filter((jogo) => jogoEquivalente(palpite, jogo));
   const diretosNaData = diretos.filter((jogo) => dataCompativel(jogo, data));
 
   if (diretosNaData.length === 1) return { tipo: "direto", jogo: diretosNaData[0] };
   if (diretosNaData.length > 1) return { tipo: "ambiguous", mensagem: "Mais de um jogo encontrado para esses times." };
   if (!data && diretos.length === 1) return { tipo: "direto", jogo: diretos[0] };
 
-  const invertidos = jogos.filter((jogo) => normalizarChave(jogo.mandante) === fora && normalizarChave(jogo.visitante) === casa);
+  const invertidos = jogos.filter((jogo) => jogoEquivalente(palpite, jogo, true));
   const invertidosNaData = invertidos.filter((jogo) => dataCompativel(jogo, data));
 
   if (invertidosNaData.length > 0) {
