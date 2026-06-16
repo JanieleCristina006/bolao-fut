@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { LIVE_REFRESH_MS } from "../constants";
 import { DATA_SOURCE_CHANGE_EVENT, isLiveDataSourceActive } from "../services/api";
 
@@ -13,18 +13,28 @@ export function useApiResource<T>(loader: (forceRefresh?: boolean) => Promise<T>
   const [data, setData] = useState<T | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const hasLoadedData = useRef(false);
 
   const carregar = useCallback(
     async (forceRefresh = false) => {
-      setIsLoading(true);
-      setError(null);
+      const isInitialLoad = !hasLoadedData.current;
+      if (isInitialLoad) {
+        setIsLoading(true);
+        setError(null);
+      }
       try {
         const resposta = await loader(forceRefresh);
+        hasLoadedData.current = true;
         setData(resposta);
+        setError(null);
       } catch (err) {
-        setError(err instanceof Error ? err.message : "Não foi possível carregar os dados.");
+        if (isInitialLoad) {
+          setError(err instanceof Error ? err.message : "Não foi possível carregar os dados.");
+        }
       } finally {
-        setIsLoading(false);
+        if (isInitialLoad) {
+          setIsLoading(false);
+        }
       }
     },
     [loader]
