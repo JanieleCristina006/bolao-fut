@@ -920,15 +920,11 @@ function findResultadoForColumn_(values, headerRow, gameCol) {
   for (var row = headerRow + 1; row <= limit; row += 1) {
     var leftText = cleanString_(values[row].slice(Math.max(0, gameCol - 6), gameCol).join(" "));
     var value = values[row][gameCol];
-    if (/resultado|oficial|final/i.test(leftText) && formatScore_(value)) {
+    if (/resultado|oficial|final/i.test(leftText)) {
       return { row: row, value: value };
     }
   }
 
-  for (var fallbackRow = limit; fallbackRow > headerRow; fallbackRow -= 1) {
-    var fallbackValue = values[fallbackRow][gameCol];
-    if (formatScore_(fallbackValue)) return { row: fallbackRow, value: fallbackValue };
-  }
   return null;
 }
 
