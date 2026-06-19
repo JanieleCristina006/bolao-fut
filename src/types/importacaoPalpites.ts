@@ -5,6 +5,7 @@ export type StatusImportacaoPalpite =
   | "palpite-existente"
   | "participante-nao-encontrado"
   | "jogo-nao-encontrado"
+  | "celula-nao-encontrada"
   | "times-invertidos"
   | "duplicado"
   | "nao-enviou"
@@ -30,6 +31,8 @@ export interface ImportacaoPalpiteItem {
   jogoTexto: string;
   mandanteOficial?: string;
   visitanteOficial?: string;
+  cabecalhoPlanilha?: string;
+  celulaPlanilha?: string;
   status: StatusImportacaoPalpite;
   valido: boolean;
   importavel: boolean;
@@ -77,9 +80,32 @@ export interface ImportarPalpiteEmLoteItem {
   jogoId: string;
   timeCasa: string;
   timeFora: string;
+  cabecalho?: string;
+  celula?: string;
   golsCasa: number;
   golsFora: number;
   decisao: DecisaoImportacaoPalpite;
+}
+
+export interface JogoEstruturaImportacao extends Jogo {
+  cabecalhoPlanilha: string;
+  celulaCabecalho: string;
+}
+
+export interface AlvoImportacaoPalpite {
+  participante: string;
+  jogoId: string;
+  cabecalho: string;
+  celula: string;
+  palpiteAtual: string;
+}
+
+export interface EstruturaImportacaoPalpites {
+  participantes: Participante[];
+  jogos: JogoEstruturaImportacao[];
+  palpites: Palpite[];
+  alvos: AlvoImportacaoPalpite[];
+  atualizadoEm: string;
 }
 
 export interface ImportarPalpitesEmLotePayload {
@@ -92,6 +118,7 @@ export interface ImportarPalpitesEmLoteDetalhe {
   participante: string;
   jogo: string;
   status: string;
+  celula?: string;
   atual?: string;
   novo?: string;
   erro?: string;

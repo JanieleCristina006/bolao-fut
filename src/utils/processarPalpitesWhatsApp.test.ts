@@ -35,6 +35,7 @@ function jogo(id: string, data: string, mandante: string, visitante: string, abr
 }
 
 const participantes = [
+  participante("Karen Milene"),
   participante("Karolyne Azola"),
   participante("Victor Guimarães"),
   participante("Brenno Vergara"),
@@ -43,6 +44,10 @@ const participantes = [
 ];
 
 const jogos = [
+  jogo("dia-9-eua-x-aus", "2026-06-19", "Estados Unidos", "Austrália", "EUA x AUS"),
+  jogo("dia-9-esc-x-mar", "2026-06-19", "Escócia", "Marrocos", "ESC x MAR"),
+  jogo("dia-9-bra-x-hai", "2026-06-19", "Brasil", "Haiti", "BRA x HAI"),
+  jogo("dia-9-tur-x-par", "2026-06-19", "Turquia", "Paraguai", "TUR x PAR"),
   jogo("jogo-esp-cab", "2026-06-15", "Espanha", "Cabo Verde"),
   jogo("jogo-bel-egi", "2026-06-15", "Bélgica", "Egito"),
   jogo("jogo-ara-uru", "2026-06-15", "Arábia Saudita", "Uruguai"),
@@ -92,6 +97,23 @@ Arábia Saudita 0x1 Uruguai
 Irã 0x2 Nova Zelândia`;
 
 const tests: Array<[string, () => void]> = [
+  [
+    "mensagem da Karen sem cabeçalho de data",
+    () => {
+      const resultado = processar(`Meus palpites (Karen Milene)
+
+EUA 2X2 Austrália
+
+Escócia 2x2 Marrocos
+
+Brasil 4x0 Haiti
+
+Turquia 1x3 Paraguai`);
+      const importaveis = resultado.itens.filter((item) => item.importavel);
+      assert(importaveis.length === 4, "Os quatro palpites da Karen deveriam ser importáveis.");
+      assert(importaveis.map((item) => item.placar).join(",") === "2x2,2x2,4x0,1x3", "Os placares da Karen deveriam ser preservados.");
+    }
+  ],
   [
     "vários participantes no mesmo texto",
     () => {

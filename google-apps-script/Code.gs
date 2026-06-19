@@ -121,6 +121,8 @@ function getSpreadsheet_() {
 }
 
 function handleGet_(action, params) {
+  if (action === "estruturaImportacao") return readEstruturaImportacao_();
+
   var snapshot = readSnapshot_();
 
   if (action === "dashboard") return snapshot;
@@ -132,6 +134,46 @@ function handleGet_(action, params) {
   if (action === "participante") return buildParticipanteDetalhe_(snapshot, params.nome);
 
   throw new Error("Ação GET inválida.");
+}
+
+function readEstruturaImportacao_() {
+  var ss = getSpreadsheet_();
+  var parsed = readPalpitesSheet_(ss);
+  var jogosTabela = readJogosTabela_(ss);
+  var jogos = mergeJogos_(parsed.jogos, jogosTabela);
+  var pagamentos = readPagamentos_(ss);
+  var rankingPlanilha = readRanking_(ss);
+  var ranking = rankingPlanilha.length ? completeRanking_(rankingPlanilha, parsed.palpites, jogos) : calcularRanking_(parsed.palpites, jogos);
+  var participantes = buildParticipantes_(ranking, pagamentos);
+  var alvosByCell = {};
+
+  Object.keys(parsed.index.palpites).forEach(function (key) {
+    var target = parsed.index.palpites[key];
+    var celula = columnName_(target.col) + target.row;
+    if (alvosByCell[celula]) return;
+    alvosByCell[celula] = {
+      participante: target.participante,
+      jogoId: target.id,
+      cabecalho: target.cabecalho,
+      celula: celula,
+      palpiteAtual: target.palpiteAtual || ""
+    };
+  });
+
+  return {
+    participantes: participantes,
+    jogos: parsed.jogos.map(function (jogo) {
+      var header = parsed.index.jogos[jogo.id];
+      return Object.assign({}, jogo, {
+        abreviacao: header && header.cabecalho ? header.cabecalho : jogo.abreviacao,
+        cabecalhoPlanilha: header && header.cabecalho ? header.cabecalho : jogo.abreviacao,
+        celulaCabecalho: header ? columnName_(header.headerCol) + header.headerRow : ""
+      });
+    }),
+    palpites: parsed.palpites,
+    alvos: Object.keys(alvosByCell).map(function (cell) { return alvosByCell[cell]; }),
+    atualizadoEm: new Date().toISOString()
+  };
 }
 
 function readSnapshot_() {
@@ -332,6 +374,7 @@ function readPalpitesSheet_(ss) {
           index.jogos[alias] = {
             id: id,
             alias: alias,
+            cabecalho: gameText,
             headerRow: row + 1,
             headerCol: col + 1,
             resultadoRow: resultadoInfo ? resultadoInfo.row + 1 : null,
@@ -349,6 +392,9 @@ function readPalpitesSheet_(ss) {
           index.palpites[alias + "::" + normalizarTexto_(participante)] = {
             id: id,
             alias: alias,
+            participante: participante,
+            cabecalho: gameText,
+            palpiteAtual: formatScore_(values[participantRow][col]) || "",
             row: participantRow + 1,
             col: col + 1
           };
@@ -536,14 +582,16 @@ function importarPalpitesEmLote_(payload) {
       var decisao = String(item.decisao || "substituir");
 
       if (!participante) throw new Error("Participante obrigatório.");
-      if (!jogoId) throw new Error("jogoId obrigatório.");
       if (["substituir", "manter", "ignorar"].indexOf(decisao) < 0) throw new Error("Decisão de importação inválida.");
       if (!isValidScoreNumber_(golsCasa) || !isValidScoreNumber_(golsFora)) throw new Error("Placar inválido.");
 
-      var jogo = findJogoById_(parsed.jogos, jogoId) || findJogoByTimes_(parsed.jogos, item);
+      var jogo = (jogoId ? findJogoById_(parsed.jogos, jogoId) : null) || findJogoByTimes_(parsed.jogos, item);
       if (!jogo) throw new Error("Jogo não encontrado na aba de palpites.");
 
-      var target = findPalpiteTarget_(parsed, item, participante, jogo);
+      var target =
+        findValidatedTargetByCell_(values, item, participante, jogo) ||
+        findPalpiteTarget_(parsed, item, participante, jogo) ||
+        findPalpiteTargetInValues_(values, participante, jogo);
       if (!target) throw new Error("Célula de palpite não encontrada para participante e jogo.");
 
       var novoPalpite = golsCasa + "x" + golsFora;
@@ -582,7 +630,9 @@ function importarPalpitesEmLote_(payload) {
         col: target.col,
         value: novoPalpite,
         atual: atual || "",
-        detalhe: detalheBase
+        detalhe: Object.assign({}, detalheBase, {
+          celula: columnName_(target.col) + target.row
+        })
       });
     } catch (err) {
       var message = "Item " + (index + 1) + ": " + errorMessage_(err);
@@ -597,10 +647,19 @@ function importarPalpitesEmLote_(payload) {
   });
 
   writePalpiteUpdates_(sheet, updates);
+  SpreadsheetApp.flush();
 
   var importados = 0;
   var atualizados = 0;
   updates.forEach(function (update) {
+    var gravado = formatScore_(sheet.getRange(update.row, update.col).getValue());
+    if (gravado !== update.value) {
+      var verificationMessage = "Falha ao confirmar gravação em " + columnName_(update.col) + update.row + ".";
+      erros.push(verificationMessage);
+      detalhes.push(Object.assign({}, update.detalhe, { status: "erro", erro: verificationMessage }));
+      return;
+    }
+
     if (update.atual) {
       atualizados += 1;
       detalhes.push(Object.assign({}, update.detalhe, { status: "atualizado" }));
@@ -610,11 +669,12 @@ function importarPalpitesEmLote_(payload) {
     }
   });
 
-  SpreadsheetApp.flush();
+  var alterados = importados + atualizados;
+  var errorSuffix = erros.length ? " " + erros.length + " erro(s). Primeiro: " + erros[0] : "";
 
   return {
-    ok: true,
-    message: "Importação concluída: " + importados + " novos, " + atualizados + " atualizados, " + ignorados + " ignorados.",
+    ok: erros.length === 0 || alterados > 0,
+    message: "Importação concluída: " + importados + " novos, " + atualizados + " atualizados, " + ignorados + " ignorados." + errorSuffix,
     importados: importados,
     atualizados: atualizados,
     ignorados: ignorados,
@@ -643,6 +703,78 @@ function findPalpiteTarget_(parsed, payload, participante, jogo) {
   }
 
   return null;
+}
+
+function findPalpiteTargetInValues_(values, participante, jogo) {
+  var participanteKey = normalizarTexto_(participante);
+  var matches = [];
+
+  for (var row = 0; row < values.length; row += 1) {
+    var gameCols = [];
+    for (var col = 0; col < values[row].length; col += 1) {
+      var gameText = cleanString_(values[row][col]).replace(/\s+/g, " ");
+      if (!looksLikeGame_(gameText)) continue;
+      var gameInfo = parseGameText_(gameText);
+      if (teamsEquivalent_(jogo.mandante, gameInfo.mandante, splitGameAbreviacao_(gameInfo.abreviacao).home) &&
+          teamsEquivalent_(jogo.visitante, gameInfo.visitante, splitGameAbreviacao_(gameInfo.abreviacao).away)) {
+        gameCols.push(col);
+      }
+    }
+
+    if (!gameCols.length) continue;
+    var resultInfo = findResultadoForColumn_(values, row, gameCols[0]);
+    var stopRow = resultInfo ? resultInfo.row : Math.min(values.length, row + 45);
+    var participantCol = guessParticipantColumn_(values, row, gameCols[0], stopRow);
+    if (participantCol < 0) continue;
+
+    for (var participantRow = row + 1; participantRow < stopRow; participantRow += 1) {
+      if (normalizarTexto_(values[participantRow][participantCol]) === participanteKey) {
+        gameCols.forEach(function (gameCol) {
+          matches.push({ row: participantRow + 1, col: gameCol + 1 });
+        });
+      }
+    }
+  }
+
+  return matches.length === 1 ? matches[0] : null;
+}
+
+function findValidatedTargetByCell_(values, payload, participante, jogo) {
+  var address = parseCellAddress_(payload && payload.celula);
+  if (!address || address.row < 1 || address.col < 1) return null;
+  if (!values[address.row - 1] || address.col > values[address.row - 1].length) return null;
+
+  var participantFound = false;
+  for (var col = 0; col < address.col - 1; col += 1) {
+    if (normalizarTexto_(values[address.row - 1][col]) === normalizarTexto_(participante)) {
+      participantFound = true;
+      break;
+    }
+  }
+  if (!participantFound) return null;
+
+  for (var row = address.row - 2; row >= Math.max(0, address.row - 46); row -= 1) {
+    var header = cleanString_(values[row][address.col - 1]).replace(/\s+/g, " ");
+    if (!looksLikeGame_(header)) continue;
+    var gameInfo = parseGameText_(header);
+    var parts = splitGameAbreviacao_(gameInfo.abreviacao);
+    var sameGame =
+      teamsEquivalent_(jogo.mandante, gameInfo.mandante, parts.home) &&
+      teamsEquivalent_(jogo.visitante, gameInfo.visitante, parts.away);
+    return sameGame ? { row: address.row, col: address.col } : null;
+  }
+
+  return null;
+}
+
+function parseCellAddress_(value) {
+  var match = String(value || "").trim().toUpperCase().match(/^([A-Z]+)(\d+)$/);
+  if (!match) return null;
+  var col = 0;
+  for (var index = 0; index < match[1].length; index += 1) {
+    col = col * 26 + match[1].charCodeAt(index) - 64;
+  }
+  return { row: Number(match[2]), col: col };
 }
 
 function findJogoByTimes_(jogos, payload) {
@@ -747,6 +879,17 @@ function writePalpiteUpdates_(sheet, updates) {
   flushGroup();
 }
 
+function columnName_(column) {
+  var result = "";
+  var current = Number(column);
+  while (current > 0) {
+    current -= 1;
+    result = String.fromCharCode(65 + (current % 26)) + result;
+    current = Math.floor(current / 26);
+  }
+  return result;
+}
+
 function atualizarPagamento_(payload) {
   var participante = normalizarNome_(payload.participante);
   if (!participante) throw new Error("Participante obrigatório.");
@@ -794,18 +937,26 @@ function atualizarPalpite_(payload) {
   var participante = normalizarNome_(payload.participante);
   var jogoId = String(payload.jogoId || "");
   var palpite = formatScore_(payload.palpite);
-  if (!participante || !jogoId || !palpite) throw new Error("Participante, jogoId e palpite válido são obrigatórios.");
+  if (!participante || !palpite) throw new Error("Participante e palpite válido são obrigatórios.");
 
   var ss = getSpreadsheet_();
   var parsed = readPalpitesSheet_(ss);
-  var jogo = findJogoById_(parsed.jogos, jogoId) || findJogoByTimes_(parsed.jogos, payload);
+  var jogo = (jogoId ? findJogoById_(parsed.jogos, jogoId) : null) || findJogoByTimes_(parsed.jogos, payload);
   if (!jogo) throw new Error("Jogo nao encontrado na aba de palpites.");
 
-  var target = findPalpiteTarget_(parsed, payload, participante, jogo);
+  var sheet = findSheet_(ss, SHEET_NAMES.palpites, true);
+  var values = sheet.getDataRange().getValues();
+  var target =
+    findValidatedTargetByCell_(values, payload, participante, jogo) ||
+    findPalpiteTarget_(parsed, payload, participante, jogo) ||
+    findPalpiteTargetInValues_(values, participante, jogo);
   if (!target) throw new Error("Célula de palpite não encontrada.");
 
-  var sheet = findSheet_(ss, SHEET_NAMES.palpites, true);
   setCellValueSafe_(sheet, target.row, target.col, palpite);
+  SpreadsheetApp.flush();
+  if (formatScore_(sheet.getRange(target.row, target.col).getValue()) !== palpite) {
+    throw new Error("O palpite não foi confirmado na célula " + columnName_(target.col) + target.row + ".");
+  }
 }
 
 function parsePostPayload_(e) {
@@ -989,7 +1140,8 @@ function findNearbyTime_(values, row, col) {
 
 function shouldSkipParticipantName_(name) {
   var text = normalizarTexto_(name);
-  return !text || /total|resultado|oficial|dia|data|horario|rodada|participante|nome|sabado|domingo|segunda|terca|quarta|quinta|sexta/.test(text);
+  if (!text) return true;
+  return /^(?:total|resultado|oficial|dia(?:\s+\d+.*)?|data|horario|rodada|participante|nome|sabado|domingo|segunda|terca|quarta|quinta|sexta)$/.test(text);
 }
 
 function calcularPontuacao_(palpite, resultado) {

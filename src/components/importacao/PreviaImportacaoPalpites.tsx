@@ -23,6 +23,7 @@ const statusMeta: Record<StatusImportacaoPalpite, { label: string; tone: "red" |
   "palpite-existente": { label: "Já existe", tone: "blue" },
   "participante-nao-encontrado": { label: "Participante não encontrado", tone: "red" },
   "jogo-nao-encontrado": { label: "Jogo não encontrado", tone: "red" },
+  "celula-nao-encontrada": { label: "Célula não encontrada", tone: "red" },
   "times-invertidos": { label: "Times invertidos", tone: "yellow" },
   duplicado: { label: "Duplicado", tone: "yellow" },
   "nao-enviou": { label: "Não enviou", tone: "gray" },
@@ -32,7 +33,8 @@ const statusMeta: Record<StatusImportacaoPalpite, { label: string; tone: "red" |
 
 function jogoLabel(jogo: Jogo): string {
   const data = formatarData(jogo.data);
-  return `${jogo.mandante} x ${jogo.visitante} · ${data === "-" ? jogo.dia : data}`;
+  const cabecalho = "cabecalhoPlanilha" in jogo ? String(jogo.cabecalhoPlanilha) : jogo.abreviacao;
+  return `${cabecalho} · ${data === "-" ? jogo.dia : data}`;
 }
 
 function rowClass(item: ImportacaoPalpiteItem): string {
@@ -147,6 +149,7 @@ export function PreviaImportacaoPalpites({
                             jogoTexto: jogo ? `${jogo.mandante} x ${jogo.visitante}` : item.jogoTexto,
                             mandanteOficial: jogo?.mandante,
                             visitanteOficial: jogo?.visitante,
+                            cabecalhoPlanilha: jogo && "cabecalhoPlanilha" in jogo ? String(jogo.cabecalhoPlanilha) : jogo?.abreviacao,
                             timeCasa: jogo?.mandante ?? item.timeCasa,
                             timeFora: jogo?.visitante ?? item.timeFora
                           });
@@ -160,6 +163,12 @@ export function PreviaImportacaoPalpites({
                         ))}
                       </Select>
                       <p className="mt-1 text-xs text-slate-500">Lido: {item.timeCasa && item.timeFora ? `${item.timeCasa} x ${item.timeFora}` : item.jogoTexto}</p>
+                      {item.cabecalhoPlanilha || item.celulaPlanilha ? (
+                        <p className="mt-1 text-xs font-semibold text-brand-700">
+                          Planilha: {item.cabecalhoPlanilha ?? item.jogoTexto}
+                          {item.celulaPlanilha ? ` · ${item.celulaPlanilha}` : ""}
+                        </p>
+                      ) : null}
                     </td>
                     <td className="border-y border-slate-200 px-3 py-3">
                       {item.status === "nao-enviou" ? (

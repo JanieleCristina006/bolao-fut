@@ -10,7 +10,15 @@ import { Spinner } from "../components/ui/Spinner";
 import { useToast } from "../components/ui/Toast";
 import { useDashboard } from "../hooks/useDashboard";
 import { api, isAdminWritesEnabled } from "../services/api";
-import type { ImportacaoPalpiteItem, ImportarPalpiteEmLoteItem, ResultadoImportacaoPalpites, StatusImportacaoPalpite } from "../types/importacaoPalpites";
+import type {
+  EstruturaImportacaoPalpites,
+  ImportacaoPalpiteItem,
+  ImportarPalpiteEmLoteItem,
+  ImportarPalpitesEmLoteResponse,
+  ResultadoImportacaoPalpites,
+  StatusImportacaoPalpite
+} from "../types/importacaoPalpites";
+import { normalizarTexto } from "../utils/formatadores";
 import { processarPalpitesWhatsApp } from "../utils/processarPalpitesWhatsApp";
 
 const exemploPlaceholder = `JOGO DIA 15/06 - SEGUNDA - HOJEEE
@@ -25,6 +33,7 @@ function statusEditado(item: ImportacaoPalpiteItem): StatusImportacaoPalpite {
   if (!item.incluir) return "removido";
   if (!item.participanteOficial) return "participante-nao-encontrado";
   if (!item.jogoId) return "jogo-nao-encontrado";
+  if (!item.celulaPlanilha) return "celula-nao-encontrada";
   if (item.golsCasa === null || item.golsFora === null || item.golsCasa < 0 || item.golsFora < 0) return "formato-invalido";
   if (item.duplicado) return "duplicado";
   if (item.palpiteAtual) return "palpite-existente";
@@ -38,6 +47,7 @@ function revalidarItem(item: ImportacaoPalpiteItem): ImportacaoPalpiteItem {
   const erros: string[] = [];
   if (status === "participante-nao-encontrado") erros.push("Selecione um participante cadastrado.");
   if (status === "jogo-nao-encontrado") erros.push("Selecione um jogo cadastrado.");
+  if (status === "celula-nao-encontrada") erros.push("A planilha não informou a célula deste participante para o jogo selecionado.");
   if (status === "formato-invalido") erros.push("Informe um placar válido.");
 
   const valido = erros.length === 0 && status !== "removido";
@@ -74,13 +84,57 @@ function montarResumo(resultado: ResultadoImportacaoPalpites): ResultadoImportac
 function itemPodeSerEnviado(item: ImportacaoPalpiteItem): item is ImportacaoPalpiteItem & {
   participanteOficial: string;
   jogoId: string;
+  celulaPlanilha: string;
   golsCasa: number;
   golsFora: number;
 } {
   if (!item.incluir || !item.importavel || !item.usarNaImportacao) return false;
   if (item.status === "nao-enviou" || item.status === "removido") return false;
   if (item.palpiteAtual && item.decisao !== "substituir") return false;
-  return Boolean(item.participanteOficial && item.jogoId && item.golsCasa !== null && item.golsFora !== null);
+  return Boolean(item.participanteOficial && item.jogoId && item.celulaPlanilha && item.golsCasa !== null && item.golsFora !== null);
+}
+
+function encontrarAlvo(
+  estrutura: EstruturaImportacaoPalpites,
+  participante: string | undefined,
+  jogoId: string | undefined
+) {
+  if (!participante || !jogoId) return undefined;
+  const participanteKey = normalizarTexto(participante);
+  return estrutura.alvos.find(
+    (alvo) => alvo.jogoId === jogoId && normalizarTexto(alvo.participante) === participanteKey
+  );
+}
+
+function aplicarEstrutura(
+  resultado: ResultadoImportacaoPalpites,
+  estrutura: EstruturaImportacaoPalpites
+): ResultadoImportacaoPalpites {
+  const itens = resultado.itens.map((item) => {
+    if (item.status === "nao-enviou" || item.status === "removido") return item;
+    const alvo = encontrarAlvo(estrutura, item.participanteOficial, item.jogoId);
+    if (!item.valido) {
+      return { ...item, celulaPlanilha: alvo?.celula, cabecalhoPlanilha: alvo?.cabecalho };
+    }
+    if (!alvo) {
+      return {
+        ...item,
+        status: "celula-nao-encontrada" as const,
+        valido: false,
+        importavel: false,
+        incluir: false,
+        erros: [...item.erros, "Célula não encontrada na estrutura atual da planilha."]
+      };
+    }
+    return {
+      ...item,
+      celulaPlanilha: alvo.celula,
+      cabecalhoPlanilha: alvo.cabecalho,
+      palpiteAtual: alvo.palpiteAtual || item.palpiteAtual
+    };
+  });
+
+  return montarResumo({ ...resultado, itens });
 }
 
 export function ImportarPalpitesWhatsApp() {
@@ -91,6 +145,8 @@ export function ImportarPalpitesWhatsApp() {
   const [resultado, setResultado] = useState<ResultadoImportacaoPalpites | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
   const [isImporting, setIsImporting] = useState(false);
+  const [importacaoConcluida, setImportacaoConcluida] = useState<ImportarPalpitesEmLoteResponse | null>(null);
+  const [estrutura, setEstrutura] = useState<EstruturaImportacaoPalpites | null>(null);
   const [adminToken, setAdminToken] = useState(window.sessionStorage.getItem("bolao-admin-token") ?? "");
 
   const palpitesParaEnviar = useMemo<ImportarPalpiteEmLoteItem[]>(() => {
@@ -100,27 +156,42 @@ export function ImportarPalpitesWhatsApp() {
       jogoId: item.jogoId,
       timeCasa: item.mandanteOficial ?? item.timeCasa,
       timeFora: item.visitanteOficial ?? item.timeFora,
+      cabecalho: item.cabecalhoPlanilha,
+      celula: item.celulaPlanilha,
       golsCasa: item.golsCasa,
       golsFora: item.golsFora,
       decisao: item.decisao
     }));
   }, [resultado]);
 
-  function processarTexto() {
+  async function processarTexto() {
     if (!data) return;
     setIsProcessing(true);
     try {
+      const estruturaAtual = adminWritesEnabled
+        ? await api.getEstruturaImportacao()
+        : {
+            participantes: data.participantes,
+            jogos: data.jogos.map((jogo) => ({ ...jogo, cabecalhoPlanilha: jogo.abreviacao, celulaCabecalho: "" })),
+            palpites: data.palpites,
+            alvos: [],
+            atualizadoEm: new Date().toISOString()
+          };
       const processado = processarPalpitesWhatsApp(texto, {
-        participantes: data.participantes,
-        jogos: data.jogos,
-        palpitesExistentes: data.palpites
+        participantes: estruturaAtual.participantes,
+        jogos: estruturaAtual.jogos,
+        palpitesExistentes: estruturaAtual.palpites
       });
-      setResultado(processado);
+      setEstrutura(estruturaAtual);
+      setResultado(adminWritesEnabled ? aplicarEstrutura(processado, estruturaAtual) : processado);
+      setImportacaoConcluida(null);
       if (processado.erros.length > 0) {
         showToast(processado.erros[0]);
       } else {
         showToast(`${processado.resumo.total} itens encontrados. Confira a prévia antes de importar.`);
       }
+    } catch (err) {
+      showToast(err instanceof Error ? err.message : "Não foi possível consultar a estrutura atual da planilha.");
     } finally {
       setIsProcessing(false);
     }
@@ -129,6 +200,8 @@ export function ImportarPalpitesWhatsApp() {
   function limparTudo() {
     setTexto("");
     setResultado(null);
+    setEstrutura(null);
+    setImportacaoConcluida(null);
   }
 
   function atualizarItem(id: string, patch: Partial<ImportacaoPalpiteItem>) {
@@ -136,7 +209,13 @@ export function ImportarPalpitesWhatsApp() {
       if (!current) return current;
       const itens = current.itens.map((item) => {
         if (item.id !== id) return item;
-        const next = revalidarItem({ ...item, ...patch });
+        const alterado = { ...item, ...patch };
+        const alvo = estrutura ? encontrarAlvo(estrutura, alterado.participanteOficial, alterado.jogoId) : undefined;
+        const next = revalidarItem({
+          ...alterado,
+          celulaPlanilha: alvo?.celula,
+          cabecalhoPlanilha: alvo?.cabecalho
+        });
         if (next.palpiteAtual && next.decisao === "ignorar") {
           return { ...next, incluir: false, status: "removido" as const, valido: false, importavel: false };
         }
@@ -182,6 +261,7 @@ export function ImportarPalpitesWhatsApp() {
         data: resultado.participantes.find((participante) => participante.data)?.data ?? null,
         palpites: palpitesParaEnviar
       });
+      setImportacaoConcluida(resposta);
       showToast(resposta.message);
       await refetch();
     } catch (err) {
@@ -245,7 +325,7 @@ export function ImportarPalpitesWhatsApp() {
                 <Button
                   icon={isProcessing ? <Spinner className="h-4 w-4" label="Processando" /> : <ClipboardPaste className="h-4 w-4" aria-hidden />}
                   disabled={isProcessing || !texto.trim()}
-                  onClick={processarTexto}
+                  onClick={() => void processarTexto()}
                 >
                   {isProcessing ? "Processando..." : "Processar palpites"}
                 </Button>
@@ -262,8 +342,8 @@ export function ImportarPalpitesWhatsApp() {
         <>
           <PreviaImportacaoPalpites
             resultado={resultado}
-            participantes={data.participantes}
-            jogos={data.jogos}
+            participantes={estrutura?.participantes ?? data.participantes}
+            jogos={estrutura?.jogos ?? data.jogos}
             onItemChange={atualizarItem}
             onToggleIncluir={toggleIncluir}
           />
@@ -284,6 +364,28 @@ export function ImportarPalpitesWhatsApp() {
               </Button>
             </div>
           </div>
+
+          {importacaoConcluida ? (
+            <Card>
+              <CardBody className="space-y-3">
+                <h3 className="font-black text-slate-950">Resultado da gravação</h3>
+                <p className="text-sm text-slate-600">{importacaoConcluida.message}</p>
+                <div className="grid gap-2 sm:grid-cols-2">
+                  {importacaoConcluida.detalhes.map((detalhe, index) => (
+                    <div
+                      key={`${detalhe.participante}-${detalhe.jogo}-${index}`}
+                      className={detalhe.status === "erro" ? "rounded-lg border border-red-200 bg-red-50 p-3 text-sm" : "rounded-lg border border-emerald-200 bg-emerald-50 p-3 text-sm"}
+                    >
+                      <strong className="block text-slate-950">{detalhe.participante} — {detalhe.jogo}</strong>
+                      <span className="text-slate-600">
+                        {detalhe.erro ?? `${detalhe.novo ?? "Palpite"} gravado${detalhe.celula ? ` em ${detalhe.celula}` : ""}.`}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </CardBody>
+            </Card>
+          ) : null}
         </>
       ) : null}
     </div>

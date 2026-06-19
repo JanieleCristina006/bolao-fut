@@ -14,7 +14,11 @@ import type {
   ParticipanteDetalhe,
   RankingItem
 } from "../types";
-import type { ImportarPalpitesEmLotePayload, ImportarPalpitesEmLoteResponse } from "../types/importacaoPalpites";
+import type {
+  EstruturaImportacaoPalpites,
+  ImportarPalpitesEmLotePayload,
+  ImportarPalpitesEmLoteResponse
+} from "../types/importacaoPalpites";
 
 const EXCEL_URL = (import.meta.env.VITE_EXCEL_FILE_URL as string | undefined)?.trim();
 const API_URL = (import.meta.env.VITE_GOOGLE_SCRIPT_API_URL as string | undefined)?.trim();
@@ -243,11 +247,7 @@ async function request<T>(action: string, forceRefresh = false): Promise<T> {
 
 async function post<T>(payload: Record<string, unknown>): Promise<T> {
   if (importedSpreadsheet || getBaseDataSource() === "excel") {
-    const message: ApiMessage = {
-      ok: false,
-      message: "A integração direta com Excel é somente leitura no navegador. Para gravar alterações, use Google Apps Script ou um backend."
-    };
-    return Promise.resolve(message as T);
+    throw new Error("O arquivo Excel aberto no navegador é somente leitura. Para gravar palpites, conecte o Google Apps Script.");
   }
 
   if (!API_URL) {
@@ -289,6 +289,23 @@ function isInvalidPostActionError(error: unknown): boolean {
     .toLowerCase();
 
   return normalized.includes("acao post invalida");
+}
+
+async function getEstruturaImportacao(): Promise<EstruturaImportacaoPalpites> {
+  try {
+    return await request<EstruturaImportacaoPalpites>(`estruturaImportacao?t=${Date.now()}`, true);
+  } catch (error) {
+    const normalized = getErrorMessage(error)
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "")
+      .toLowerCase();
+    if (normalized.includes("acao get invalida")) {
+      throw new Error(
+        "O Google Apps Script publicado está em uma versão antiga. Copie o Code.gs atualizado e implante uma Nova versão antes de importar."
+      );
+    }
+    throw error;
+  }
 }
 
 async function importarPalpitesIndividualmente(payload: ImportarPalpitesEmLotePayload): Promise<ImportarPalpitesEmLoteResponse> {
@@ -471,6 +488,7 @@ export const api = {
   getPagamentos: (forceRefresh = false) => request<Pagamento[]>("pagamentos", forceRefresh),
   getParticipante: (nome: string, forceRefresh = false) =>
     request<ParticipanteDetalhe>(`participante?nome=${encodeURIComponent(nome)}`, forceRefresh),
+  getEstruturaImportacao,
   atualizarPagamento: (payload: AtualizarPagamentoPayload) =>
     post<ApiMessage>({ action: "atualizarPagamento", ...payload }),
   atualizarResultado: (payload: AtualizarResultadoPayload) =>
@@ -479,7 +497,11 @@ export const api = {
     post<ApiMessage>({ action: "atualizarPalpite", ...payload }),
   importarPalpitesEmLote: async (payload: ImportarPalpitesEmLotePayload) => {
     try {
-      return await post<ImportarPalpitesEmLoteResponse>({ action: "importarPalpitesEmLote", ...payload });
+      const response = await post<ImportarPalpitesEmLoteResponse>({ action: "importarPalpitesEmLote", ...payload });
+      if (response.erros.length > 0 && response.importados + response.atualizados === 0) {
+        throw new Error(response.erros[0]);
+      }
+      return response;
     } catch (error) {
       if (!isInvalidPostActionError(error)) throw error;
       return importarPalpitesIndividualmente(payload);
