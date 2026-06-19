@@ -7,6 +7,14 @@ const SHEET_NAMES = {
 
 const VALOR_PIX = 10;
 const MAX_SCAN_ROWS = 120;
+const SCORING_ENGINE_VERSION = "2026-06-19-v2";
+const SCORE_COLORS = {
+  exato: "#5B9BD5",
+  pontuado: "#70AD47",
+  neutro: "#FFFFFF",
+  textoClaro: "#FFFFFF",
+  textoEscuro: "#000000"
+};
 
 const TEAM_NAMES = {
   AFS: "África do Sul",
@@ -122,6 +130,43 @@ function doOptions() {
   return json_({ ok: true });
 }
 
+function configurarAutomacao() {
+  var ss = getSpreadsheet_();
+  var triggers = ScriptApp.getProjectTriggers();
+  triggers.forEach(function (trigger) {
+    if (trigger.getHandlerFunction() === "handleScoringEdit_") {
+      ScriptApp.deleteTrigger(trigger);
+    }
+  });
+  ScriptApp.newTrigger("handleScoringEdit_").forSpreadsheet(ss).onEdit().create();
+  recalcularPontuacaoPlanilha_(ss);
+  return "Automação configurada e ranking recalculado com sucesso.";
+}
+
+function recalcularTudo() {
+  var ss = getSpreadsheet_();
+  recalcularPontuacaoPlanilha_(ss);
+  return "Pontuação e ranking recalculados com sucesso.";
+}
+
+function handleScoringEdit_(e) {
+  try {
+    if (!e || !e.range) return;
+    var sheet = e.range.getSheet();
+    if (normalizarTexto_(sheet.getName()) !== normalizarTexto_(SHEET_NAMES.palpites[0])) return;
+
+    var lock = LockService.getScriptLock();
+    if (!lock.tryLock(1000)) return;
+    try {
+      recalcularPontuacaoPlanilha_(sheet.getParent());
+    } finally {
+      lock.releaseLock();
+    }
+  } catch (err) {
+    console.error(errorMessage_(err));
+  }
+}
+
 function getSpreadsheet_() {
   var spreadsheetId = String(PropertiesService.getScriptProperties().getProperty("SPREADSHEET_ID") || "").trim();
   if (spreadsheetId) return SpreadsheetApp.openById(spreadsheetId);
@@ -149,6 +194,7 @@ function handleGet_(action, params) {
 
 function readEstruturaImportacao_() {
   var ss = getSpreadsheet_();
+  ensureScoringSetup_(ss);
   var parsed = readPalpitesSheet_(ss);
   var jogosTabela = readJogosTabela_(ss);
   var jogos = mergeJogos_(parsed.jogos, jogosTabela);
@@ -189,6 +235,7 @@ function readEstruturaImportacao_() {
 
 function readSnapshot_() {
   var ss = getSpreadsheet_();
+  ensureScoringSetup_(ss);
   var rankingSheet = findSheet_(ss, SHEET_NAMES.ranking, false);
   if (rankingSheet) {
     repararRankingSheet_(rankingSheet);
@@ -605,7 +652,7 @@ function adicionarParticipante_(payload) {
   var resultadoPalpites = adicionarParticipanteNosPalpites_(palpitesSheet, participante);
   var resultadoRanking = adicionarParticipanteNoRanking_(rankingSheet, participante);
   var resultadoPagamento = adicionarParticipanteNoPagamento_(pagamentoSheet, participante);
-  repararRankingSheet_(rankingSheet);
+  recalcularPontuacaoPlanilha_(ss);
 
   SpreadsheetApp.flush();
 
@@ -730,6 +777,143 @@ function findPalpiteBlocks_(values) {
   }
 
   return blocks;
+}
+
+function ensureScoringSetup_(ss) {
+  var properties = PropertiesService.getScriptProperties();
+  if (properties.getProperty("SCORING_ENGINE_VERSION") === SCORING_ENGINE_VERSION) return;
+  recalcularPontuacaoPlanilha_(ss);
+}
+
+function recalcularPontuacaoPlanilha_(ss) {
+  SpreadsheetApp.flush();
+  var palpitesSheet = findSheet_(ss, SHEET_NAMES.palpites, true);
+  var values = palpitesSheet.getDataRange().getValues();
+  var blocks = findPalpiteBlocks_(values);
+  if (!blocks.length) throw new Error("Nenhum bloco de jogos encontrado para recalcular a pontuação.");
+
+  var totais = {};
+  var ordemParticipantes = [];
+
+  blocks.forEach(function (block) {
+    var rowCount = block.resultRow - block.headerRow - 1;
+    if (rowCount <= 0) return;
+
+    var backgrounds = [];
+    var fontColors = [];
+    var fontWeights = [];
+    var totaisDoBloco = [];
+    var cravadasDoBloco = [];
+
+    for (var row = block.headerRow + 1; row < block.resultRow; row += 1) {
+      var participante = normalizarNome_(values[row][block.participantCol]);
+      var pontos = 0;
+      var cravadas = 0;
+      var rowBackgrounds = [];
+      var rowFontColors = [];
+      var rowFontWeights = [];
+
+      block.gameCols.forEach(function (gameCol) {
+        var pontuacao = participante
+          ? calcularPontuacao_(values[row][gameCol], values[block.resultRow][gameCol])
+          : { pontos: 0, cravada: false, tipo: "pendente" };
+        pontos += pontuacao.pontos;
+        cravadas += pontuacao.cravada ? 1 : 0;
+
+        var pontuado = pontuacao.pontos > 0;
+        rowBackgrounds.push(
+          pontuacao.tipo === "exato"
+            ? SCORE_COLORS.exato
+            : pontuado
+              ? SCORE_COLORS.pontuado
+              : SCORE_COLORS.neutro
+        );
+        rowFontColors.push(pontuado ? SCORE_COLORS.textoClaro : SCORE_COLORS.textoEscuro);
+        rowFontWeights.push(pontuado ? "bold" : "normal");
+      });
+
+      backgrounds.push(rowBackgrounds);
+      fontColors.push(rowFontColors);
+      fontWeights.push(rowFontWeights);
+      totaisDoBloco.push([pontos]);
+      cravadasDoBloco.push([cravadas]);
+
+      if (participante && !shouldSkipParticipantName_(participante)) {
+        var key = normalizarTexto_(participante);
+        if (!totais[key]) {
+          totais[key] = { participante: participante, pontos: 0, cravadas: 0, ordem: ordemParticipantes.length };
+          ordemParticipantes.push(key);
+        }
+        totais[key].pontos += pontos;
+        totais[key].cravadas += cravadas;
+      }
+    }
+
+    var firstGameCol = Math.min.apply(null, block.gameCols);
+    var lastGameCol = Math.max.apply(null, block.gameCols);
+    var contiguousGameCount = lastGameCol - firstGameCol + 1;
+    if (contiguousGameCount === block.gameCols.length) {
+      palpitesSheet
+        .getRange(block.headerRow + 2, firstGameCol + 1, rowCount, contiguousGameCount)
+        .setBackgrounds(backgrounds)
+        .setFontColors(fontColors)
+        .setFontWeights(fontWeights);
+    }
+
+    if (block.totalCol >= 0) {
+      palpitesSheet.getRange(block.headerRow + 2, block.totalCol + 1, rowCount, 1).setValues(totaisDoBloco);
+    }
+    if (block.cravadasCol >= 0) {
+      palpitesSheet.getRange(block.headerRow + 2, block.cravadasCol + 1, rowCount, 1).setValues(cravadasDoBloco);
+    }
+  });
+
+  atualizarBaseRanking_(ss, totais);
+  repararRankingSheet_(findSheet_(ss, SHEET_NAMES.ranking, true));
+  PropertiesService.getScriptProperties().setProperty("SCORING_ENGINE_VERSION", SCORING_ENGINE_VERSION);
+  SpreadsheetApp.flush();
+}
+
+function atualizarBaseRanking_(ss, totais) {
+  var sheet = findSheet_(ss, SHEET_NAMES.ranking, true);
+  var values = sheet.getDataRange().getValues();
+  var headerInfo = detectHeader_(values, ["posicao", "participante", "pontos", "cravadas"]);
+  if (!headerInfo) throw new Error("Cabeçalho do Ranking não encontrado.");
+
+  var participantCols = [];
+  headerInfo.headers.forEach(function (header, index) {
+    if (header === "participante" || header === "nome") participantCols.push(index);
+  });
+  if (participantCols.length < 2) throw new Error("Base interna do Ranking não encontrada.");
+
+  var participantCol = participantCols[participantCols.length - 1];
+  var pointsCol = findColumnAfter_(headerInfo.headers, ["pontos", "total"], participantCol + 1);
+  var cravadasCol = findColumnAfter_(headerInfo.headers, ["cravadas", "placares", "exatos"], participantCol + 1);
+  var orderCol = findColumnAfter_(headerInfo.headers, ["ordem"], participantCol + 1);
+  if (pointsCol < 0 || cravadasCol < 0 || orderCol < 0) {
+    throw new Error("Colunas de cálculo do Ranking não encontradas.");
+  }
+
+  var firstRow = headerInfo.row + 1;
+  var points = [];
+  var cravadas = [];
+  var orders = [];
+  var rowCount = 0;
+
+  for (var row = firstRow; row < values.length; row += 1) {
+    var participante = normalizarNome_(values[row][participantCol]);
+    if (!participante) break;
+    var total = totais[normalizarTexto_(participante)] || { pontos: 0, cravadas: 0 };
+    points.push([total.pontos]);
+    cravadas.push([total.cravadas]);
+    orders.push([total.pontos * 100000 + total.cravadas * 100 + (100 - rowCount)]);
+    rowCount += 1;
+  }
+
+  if (!rowCount) throw new Error("Nenhum participante encontrado na base do Ranking.");
+  sheet.getRange(firstRow + 1, pointsCol + 1, rowCount, 1).setValues(points);
+  sheet.getRange(firstRow + 1, cravadasCol + 1, rowCount, 1).setValues(cravadas);
+  sheet.getRange(firstRow + 1, orderCol + 1, rowCount, 1).setValues(orders);
 }
 
 function adicionarParticipanteNoRanking_(sheet, participante) {
@@ -964,6 +1148,7 @@ function importarPalpitesEmLote_(payload) {
 
   writePalpiteUpdates_(sheet, updates);
   SpreadsheetApp.flush();
+  if (updates.length) recalcularPontuacaoPlanilha_(ss);
 
   var importados = 0;
   var atualizados = 0;
@@ -1247,6 +1432,7 @@ function atualizarResultado_(payload) {
 
   var sheet = findSheet_(ss, SHEET_NAMES.palpites, true);
   setCellValueSafe_(sheet, target.resultadoRow, target.resultadoCol, resultado);
+  recalcularPontuacaoPlanilha_(ss);
 }
 
 function atualizarPalpite_(payload) {
@@ -1273,6 +1459,7 @@ function atualizarPalpite_(payload) {
   if (formatScore_(sheet.getRange(target.row, target.col).getValue()) !== palpite) {
     throw new Error("O palpite não foi confirmado na célula " + columnName_(target.col) + target.row + ".");
   }
+  recalcularPontuacaoPlanilha_(ss);
 }
 
 function parsePostPayload_(e) {

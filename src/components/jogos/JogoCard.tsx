@@ -1,4 +1,4 @@
-import { ChevronDown, ChevronUp, Download, Timer } from "lucide-react";
+import { ChevronDown, ChevronUp, Download, PencilLine, Save, Timer, X } from "lucide-react";
 import { useMemo, useState } from "react";
 import { PONTUACAO_LABELS } from "../../constants";
 import type { Jogo, Palpite, PontuacaoTipo } from "../../types";
@@ -7,12 +7,17 @@ import { formatarData } from "../../utils/formatadores";
 import { Badge } from "../ui/Badge";
 import { Button } from "../ui/Button";
 import { Card, CardBody, CardHeader } from "../ui/Card";
+import { Input } from "../ui/Input";
+import { Spinner } from "../ui/Spinner";
 
 interface JogoCardProps {
   jogo: Jogo;
   palpites: Palpite[];
   initiallyOpen?: boolean;
+  canEditResult?: boolean;
+  isSavingResult?: boolean;
   onPdf: (jogo: Jogo, palpites: Palpite[]) => void;
+  onSaveResult?: (jogo: Jogo, resultado: string) => Promise<boolean>;
 }
 
 function tonePorTipo(tipo: PontuacaoTipo) {
@@ -33,12 +38,28 @@ function rowClass(tipo: PontuacaoTipo) {
   }[tipo];
 }
 
-export function JogoCard({ jogo, palpites, initiallyOpen = false, onPdf }: JogoCardProps) {
+export function JogoCard({
+  jogo,
+  palpites,
+  initiallyOpen = false,
+  canEditResult = false,
+  isSavingResult = false,
+  onPdf,
+  onSaveResult
+}: JogoCardProps) {
   const [open, setOpen] = useState(initiallyOpen);
+  const [editingResult, setEditingResult] = useState(false);
+  const [resultValue, setResultValue] = useState(jogo.resultado ?? "");
   const palpitesOrdenados = useMemo(
     () => [...palpites].sort((a, b) => a.participante.localeCompare(b.participante, "pt-BR")),
     [palpites]
   );
+
+  async function salvarResultado() {
+    if (!onSaveResult) return;
+    const saved = await onSaveResult(jogo, resultValue);
+    if (saved) setEditingResult(false);
+  }
 
   return (
     <Card className="overflow-hidden">
@@ -63,6 +84,53 @@ export function JogoCard({ jogo, palpites, initiallyOpen = false, onPdf }: JogoC
           </p>
         </div>
         <div className="grid gap-2 sm:flex sm:flex-wrap lg:justify-end">
+          {canEditResult ? (
+            editingResult ? (
+              <div className="flex w-full gap-2 sm:w-auto">
+                <Input
+                  className="w-28"
+                  value={resultValue}
+                  onChange={(event) => setResultValue(event.target.value)}
+                  placeholder="2x1"
+                  aria-label={`Resultado de ${jogo.mandante} x ${jogo.visitante}`}
+                  disabled={isSavingResult}
+                />
+                <Button
+                  aria-label="Salvar resultado"
+                  title="Salvar resultado"
+                  icon={isSavingResult ? <Spinner className="h-4 w-4" label="Salvando" /> : <Save className="h-4 w-4" aria-hidden />}
+                  disabled={isSavingResult || !resultValue.trim()}
+                  onClick={() => void salvarResultado()}
+                >
+                  Salvar
+                </Button>
+                <Button
+                  variant="ghost"
+                  aria-label="Cancelar edição"
+                  title="Cancelar edição"
+                  disabled={isSavingResult}
+                  onClick={() => {
+                    setResultValue(jogo.resultado ?? "");
+                    setEditingResult(false);
+                  }}
+                >
+                  <X className="h-4 w-4" aria-hidden />
+                </Button>
+              </div>
+            ) : (
+              <Button
+                className="w-full sm:w-auto"
+                variant="secondary"
+                icon={<PencilLine className="h-4 w-4" aria-hidden />}
+                onClick={() => {
+                  setResultValue(jogo.resultado ?? "");
+                  setEditingResult(true);
+                }}
+              >
+                {jogo.resultado ? "Editar resultado" : "Adicionar resultado"}
+              </Button>
+            )
+          ) : null}
           <Button className="w-full sm:w-auto" variant="secondary" icon={<Download className="h-4 w-4" aria-hidden />} onClick={() => onPdf(jogo, palpitesOrdenados)}>
             PDF do jogo
           </Button>

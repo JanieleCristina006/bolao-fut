@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { Download, Printer, RotateCcw } from "lucide-react";
+import { Download, KeyRound, Printer, RotateCcw } from "lucide-react";
 import { useSearchParams } from "react-router-dom";
 import { JogoCard } from "../components/jogos/JogoCard";
 import { Button } from "../components/ui/Button";
@@ -12,6 +12,8 @@ import { Select } from "../components/ui/Select";
 import { useDebounce } from "../hooks/useDebounce";
 import { useJogos } from "../hooks/useJogos";
 import type { Jogo, Palpite } from "../types";
+import { api, isAdminWritesEnabled } from "../services/api";
+import { useToast } from "../components/ui/Toast";
 import { filtrarJogos, type FiltrosJogos } from "../utils/filtros";
 import { normalizarTexto } from "../utils/formatadores";
 import { gerarPdfPalpitesDeJogo, gerarPdfPalpitesFiltrados, gerarPdfPalpitesParticipante } from "../utils/gerarPdfPalpites";
@@ -26,7 +28,11 @@ function palpiteBateTipo(palpite: Palpite, tipo: FiltrosJogos["tipo"]): boolean 
 
 export function Jogos() {
   const { data, isLoading, error, refetch } = useJogos();
+  const { showToast } = useToast();
+  const adminWritesEnabled = isAdminWritesEnabled();
   const [searchParams, setSearchParams] = useSearchParams();
+  const [savingResultId, setSavingResultId] = useState<string | null>(null);
+  const [adminToken, setAdminToken] = useState(window.sessionStorage.getItem("bolao-admin-token") ?? "");
   const [filtros, setFiltros] = useState<FiltrosJogos>({
     participante: searchParams.get("participante") ?? "",
     dia: searchParams.get("dia") ?? "",
@@ -82,6 +88,33 @@ export function Jogos() {
 
   const totalPages = Math.max(1, Math.ceil(jogosFiltrados.length / PAGE_SIZE_JOGOS));
   const paginaAtual = jogosFiltrados.slice((page - 1) * PAGE_SIZE_JOGOS, page * PAGE_SIZE_JOGOS);
+
+  async function salvarResultado(jogo: Jogo, resultadoTexto: string): Promise<boolean> {
+    const resultado = resultadoTexto.trim().toLowerCase().replace(/\s+/g, "");
+    if (!/^\d{1,2}x\d{1,2}$/.test(resultado)) {
+      showToast("Informe o resultado no formato 2x1.");
+      return false;
+    }
+
+    if (!adminToken) {
+      showToast("Informe o token administrativo na página Jogos.");
+      return false;
+    }
+    if (!window.confirm(`Confirmar resultado ${resultado} para ${jogo.mandante} x ${jogo.visitante}?`)) return false;
+
+    setSavingResultId(jogo.id);
+    try {
+      const resposta = await api.atualizarResultado({ jogoId: jogo.id, resultado, adminToken });
+      await refetch();
+      showToast(resposta.message);
+      return true;
+    } catch (err) {
+      showToast(err instanceof Error ? err.message : "Não foi possível salvar o resultado.");
+      return false;
+    } finally {
+      setSavingResultId(null);
+    }
+  }
 
   if (isLoading) return <LoadingSkeleton rows={8} />;
   if (error || !data) return <ErrorState message={error ?? "Jogos indisponíveis."} onRetry={refetch} />;
@@ -158,6 +191,22 @@ export function Jogos() {
         >
           Limpar filtros
         </Button>
+        {adminWritesEnabled ? (
+          <div className="relative md:col-span-2 xl:col-span-1">
+            <KeyRound className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" aria-hidden />
+            <Input
+              className="pl-9"
+              type="password"
+              value={adminToken}
+              onChange={(event) => {
+                setAdminToken(event.target.value);
+                window.sessionStorage.setItem("bolao-admin-token", event.target.value);
+              }}
+              placeholder="Token para editar resultados"
+              aria-label="Token administrativo"
+            />
+          </div>
+        ) : null}
       </div>
 
       {paginaAtual.length === 0 ? (
@@ -169,6 +218,9 @@ export function Jogos() {
               key={jogo.id}
               jogo={jogo}
               palpites={palpitesFiltrados.filter((palpite) => palpite.jogoId === jogo.id)}
+              canEditResult={adminWritesEnabled}
+              isSavingResult={savingResultId === jogo.id}
+              onSaveResult={salvarResultado}
               onPdf={(item: Jogo, itens: Palpite[]) => gerarPdfPalpitesDeJogo(item, itens)}
             />
           ))}
