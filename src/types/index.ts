@@ -105,6 +105,19 @@ export interface AtualizarPalpitePayload {
   adminToken: string;
 }
 
+export interface AdicionarParticipantePayload {
+  nome: string;
+  adminToken: string;
+}
+
+export interface AdicionarParticipanteResponse extends ApiMessage {
+  participante: string;
+  jogosAdicionados: number;
+  jogosExistentes: number;
+  rankingAdicionado: boolean;
+  pagamentoAdicionado: boolean;
+}
+
 export interface ApiMessage {
   ok: boolean;
   message: string;

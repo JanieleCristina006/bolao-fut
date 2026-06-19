@@ -2,6 +2,8 @@ import { CACHE_TTL_MS } from "../constants";
 import { dashboardMock, getParticipanteMock, jogosMock, pagamentosMock, palpitesMock, participantesMock, rankingMock } from "../mocks/data";
 import { getExcelAction, loadExcelDashboard, parseExcelDashboard } from "./excel";
 import type {
+  AdicionarParticipantePayload,
+  AdicionarParticipanteResponse,
   ApiMessage,
   AtualizarPagamentoPayload,
   AtualizarPalpitePayload,
@@ -308,6 +310,19 @@ async function getEstruturaImportacao(): Promise<EstruturaImportacaoPalpites> {
   }
 }
 
+async function adicionarParticipante(payload: AdicionarParticipantePayload): Promise<AdicionarParticipanteResponse> {
+  try {
+    return await post<AdicionarParticipanteResponse>({ action: "adicionarParticipante", ...payload });
+  } catch (error) {
+    if (isInvalidPostActionError(error)) {
+      throw new Error(
+        "O Google Apps Script publicado ainda não possui o cadastro de participantes. Atualize o Code.gs e implante uma Nova versão."
+      );
+    }
+    throw error;
+  }
+}
+
 async function importarPalpitesIndividualmente(payload: ImportarPalpitesEmLotePayload): Promise<ImportarPalpitesEmLoteResponse> {
   const detalhes: ImportarPalpitesEmLoteResponse["detalhes"] = [];
   const erros: string[] = [];
@@ -495,6 +510,7 @@ export const api = {
     post<ApiMessage>({ action: "atualizarResultado", ...payload }),
   atualizarPalpite: (payload: AtualizarPalpitePayload) =>
     post<ApiMessage>({ action: "atualizarPalpite", ...payload }),
+  adicionarParticipante,
   importarPalpitesEmLote: async (payload: ImportarPalpitesEmLotePayload) => {
     try {
       const response = await post<ImportarPalpitesEmLoteResponse>({ action: "importarPalpitesEmLote", ...payload });

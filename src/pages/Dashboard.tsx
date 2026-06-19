@@ -1,6 +1,6 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, type FormEvent } from "react";
 import { Link } from "react-router-dom";
-import { CalendarClock, CheckCircle2, CreditCard, Download, RefreshCw, Smartphone, Target, Trophy, Users } from "lucide-react";
+import { CalendarClock, CheckCircle2, CreditCard, Download, KeyRound, RefreshCw, Smartphone, Target, Trophy, UserPlus, Users, X } from "lucide-react";
 import { Podium } from "../components/dashboard/Podium";
 import { StatCard } from "../components/dashboard/StatCard";
 import { Badge } from "../components/ui/Badge";
@@ -9,14 +9,24 @@ import { Card, CardBody, CardHeader } from "../components/ui/Card";
 import { EmptyState } from "../components/ui/EmptyState";
 import { ErrorState } from "../components/ui/ErrorState";
 import { LoadingSkeleton } from "../components/ui/LoadingSkeleton";
+import { Input } from "../components/ui/Input";
+import { Spinner } from "../components/ui/Spinner";
+import { useToast } from "../components/ui/Toast";
 import { useDashboard } from "../hooks/useDashboard";
 import { isPwaInstalled, openPwaInstallPrompt, PWA_INSTALL_STATE_CHANGE_EVENT } from "../pwa";
+import { api, isAdminWritesEnabled } from "../services/api";
 import { formatarData, formatarDataHora } from "../utils/formatadores";
 import { gerarPdfRelatorioGeral } from "../utils/gerarPdfRelatorioGeral";
 
 export function Dashboard() {
   const { data, isLoading, error, refetch } = useDashboard();
+  const { showToast } = useToast();
   const [isAppInstalled, setIsAppInstalled] = useState(isPwaInstalled);
+  const [showAddParticipant, setShowAddParticipant] = useState(false);
+  const [participantName, setParticipantName] = useState("");
+  const [adminToken, setAdminToken] = useState(window.sessionStorage.getItem("bolao-admin-token") ?? "");
+  const [isAddingParticipant, setIsAddingParticipant] = useState(false);
+  const adminWritesEnabled = isAdminWritesEnabled();
 
   useEffect(() => {
     const syncPwaState = () => setIsAppInstalled(isPwaInstalled());
@@ -27,6 +37,37 @@ export function Dashboard() {
       window.removeEventListener("appinstalled", syncPwaState);
     };
   }, []);
+
+  async function handleAddParticipant(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const nome = participantName.trim().replace(/\s+/g, " ");
+    if (!nome) {
+      showToast("Informe o nome do participante.");
+      return;
+    }
+    if (!adminToken) {
+      showToast("Informe o token administrativo.");
+      return;
+    }
+    if (data?.participantes.some((participante) => participante.nome.localeCompare(nome, "pt-BR", { sensitivity: "base" }) === 0)) {
+      showToast("Esse participante já está cadastrado.");
+      return;
+    }
+    if (!window.confirm(`Adicionar ${nome} em todos os jogos, no Ranking e em Pagamentos?`)) return;
+
+    setIsAddingParticipant(true);
+    try {
+      const resposta = await api.adicionarParticipante({ nome, adminToken });
+      showToast(resposta.message);
+      setParticipantName("");
+      setShowAddParticipant(false);
+      await refetch();
+    } catch (err) {
+      showToast(err instanceof Error ? err.message : "Não foi possível adicionar o participante.");
+    } finally {
+      setIsAddingParticipant(false);
+    }
+  }
 
   if (isLoading) return <LoadingSkeleton rows={8} />;
   if (error || !data) return <ErrorState message={error ?? "Dados indisponíveis."} onRetry={refetch} />;
@@ -54,6 +95,16 @@ export function Dashboard() {
             <Button className="w-full sm:w-auto" variant="secondary" icon={<RefreshCw className="h-4 w-4" aria-hidden />} onClick={refetch}>
               Atualizar dados
             </Button>
+            {adminWritesEnabled ? (
+              <Button
+                className="w-full sm:w-auto"
+                variant="secondary"
+                icon={<UserPlus className="h-4 w-4" aria-hidden />}
+                onClick={() => setShowAddParticipant((current) => !current)}
+              >
+                Novo participante
+              </Button>
+            ) : null}
             {!isAppInstalled ? (
               <Button
                 variant="secondary"
@@ -70,6 +121,53 @@ export function Dashboard() {
           </div>
         </div>
       </section>
+
+      {showAddParticipant ? (
+        <Card className="border-brand-200">
+          <CardHeader className="flex items-center justify-between gap-3">
+            <div>
+              <h2 className="text-lg font-black text-slate-950">Adicionar novo participante</h2>
+              <p className="text-sm text-slate-500">O nome será incluído em todos os jogos, no Ranking e em Pagamentos.</p>
+            </div>
+            <Button variant="ghost" className="min-h-9 px-2" aria-label="Fechar" onClick={() => setShowAddParticipant(false)}>
+              <X className="h-4 w-4" aria-hidden />
+            </Button>
+          </CardHeader>
+          <CardBody>
+            <form className="grid gap-3 md:grid-cols-[1fr_18rem_auto]" onSubmit={(event) => void handleAddParticipant(event)}>
+              <Input
+                value={participantName}
+                onChange={(event) => setParticipantName(event.target.value)}
+                placeholder="Nome completo do participante"
+                aria-label="Nome do participante"
+                disabled={isAddingParticipant}
+              />
+              <div className="relative">
+                <KeyRound className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" aria-hidden />
+                <Input
+                  className="pl-9"
+                  type="password"
+                  value={adminToken}
+                  onChange={(event) => {
+                    setAdminToken(event.target.value);
+                    window.sessionStorage.setItem("bolao-admin-token", event.target.value);
+                  }}
+                  placeholder="Token administrativo"
+                  aria-label="Token administrativo"
+                  disabled={isAddingParticipant}
+                />
+              </div>
+              <Button
+                type="submit"
+                icon={isAddingParticipant ? <Spinner className="h-4 w-4" label="Adicionando" /> : <UserPlus className="h-4 w-4" aria-hidden />}
+                disabled={isAddingParticipant || !participantName.trim() || !adminToken}
+              >
+                {isAddingParticipant ? "Adicionando..." : "Adicionar"}
+              </Button>
+            </form>
+          </CardBody>
+        </Card>
+      ) : null}
 
       <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-6">
         <StatCard tone="gold" label="Líder atual" value={lider?.participante ?? "-"} icon={<Trophy className="h-6 w-6" aria-hidden />} />

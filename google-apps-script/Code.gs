@@ -97,6 +97,17 @@ function doPost(e) {
       return json_(importarPalpitesEmLote_(payload));
     }
 
+    if (action === "adicionarParticipante") {
+      return json_(adicionarParticipante_(payload));
+    }
+
+    if (action === "repararRanking") {
+      var ss = getSpreadsheet_();
+      repararRankingSheet_(findSheet_(ss, SHEET_NAMES.ranking, true));
+      SpreadsheetApp.flush();
+      return json_({ ok: true, message: "Ranking reparado com sucesso." });
+    }
+
     throw new Error("Ação POST inválida.");
   } catch (err) {
     return json_({ ok: false, message: errorMessage_(err) });
@@ -178,6 +189,11 @@ function readEstruturaImportacao_() {
 
 function readSnapshot_() {
   var ss = getSpreadsheet_();
+  var rankingSheet = findSheet_(ss, SHEET_NAMES.ranking, false);
+  if (rankingSheet) {
+    repararRankingSheet_(rankingSheet);
+    SpreadsheetApp.flush();
+  }
   var parsedPalpites = readPalpitesSheet_(ss);
   var jogosTabela = readJogosTabela_(ss);
   var jogos = mergeJogos_(parsedPalpites.jogos, jogosTabela);
@@ -221,15 +237,19 @@ function readRanking_(ss) {
   if (!headerInfo) return [];
 
   var headers = headerInfo.headers;
-  var posicaoCol = findColumn_(headers, ["posicao", "rank"]);
-  var participanteCol = findColumn_(headers, ["participante", "nome"]);
-  var pontosCol = findColumn_(headers, ["pontos", "total"]);
-  var cravadasCol = findColumn_(headers, ["cravadas", "placares", "exatos"]);
-  var palpitesCol = findColumn_(headers, ["palpites", "quantidade"]);
+  var participantCols = [];
+  headers.forEach(function (header, index) {
+    if (header === "participante" || header === "nome") participantCols.push(index);
+  });
+  var participanteCol = participantCols.length ? participantCols[participantCols.length - 1] : -1;
+  var posicaoCol = participantCols.length > 1 ? -1 : findColumn_(headers, ["posicao", "rank"]);
+  var pontosCol = findColumnAfter_(headers, ["pontos", "total"], participanteCol + 1);
+  var cravadasCol = findColumnAfter_(headers, ["cravadas", "placares", "exatos"], participanteCol + 1);
+  var palpitesCol = findColumnAfter_(headers, ["palpites", "quantidade"], participanteCol + 1);
 
   if (participanteCol < 0 || pontosCol < 0) return [];
 
-  return values
+  var ranking = values
     .slice(headerInfo.row + 1)
     .filter(function (row) { return !isRowEmpty_(row); })
     .map(function (row, index) {
@@ -237,7 +257,7 @@ function readRanking_(ss) {
       if (!participante) return null;
 
       return {
-        posicao: posicaoCol >= 0 && toNumber_(row[posicaoCol]) > 0 ? toNumber_(row[posicaoCol]) : index + 1,
+        posicao: posicaoCol >= 0 && toNumber_(row[posicaoCol]) > 0 ? toNumber_(row[posicaoCol]) : 0,
         participante: participante,
         pontos: toNumber_(row[pontosCol]),
         cravadas: cravadasCol >= 0 ? toNumber_(row[cravadasCol]) : 0,
@@ -247,8 +267,20 @@ function readRanking_(ss) {
         ordemOriginal: index
       };
     })
-    .filter(Boolean)
-    .sort(function (a, b) { return a.posicao - b.posicao; });
+    .filter(Boolean);
+
+  if (participantCols.length > 1) {
+    return ranking
+      .sort(function (a, b) {
+        return b.pontos - a.pontos || b.cravadas - a.cravadas || a.ordemOriginal - b.ordemOriginal;
+      })
+      .map(function (item, index) {
+        item.posicao = index + 1;
+        return item;
+      });
+  }
+
+  return ranking.sort(function (a, b) { return a.posicao - b.posicao; });
 }
 
 function readPagamentos_(ss) {
@@ -557,6 +589,290 @@ function buildParticipanteDetalhe_(snapshot, nome) {
     palpites: palpites,
     jogosSemPalpite: snapshot.jogos.filter(function (jogo) { return !jogosComPalpite[jogo.id]; })
   });
+}
+
+function adicionarParticipante_(payload) {
+  var participante = normalizarNome_(payload.nome);
+  if (participante.length < 2) throw new Error("Informe o nome completo do participante.");
+  if (participante.length > 80) throw new Error("O nome do participante é muito longo.");
+  if (shouldSkipParticipantName_(participante)) throw new Error("Esse nome é reservado pela estrutura da planilha.");
+
+  var ss = getSpreadsheet_();
+  var palpitesSheet = findSheet_(ss, SHEET_NAMES.palpites, true);
+  var rankingSheet = findSheet_(ss, SHEET_NAMES.ranking, true);
+  var pagamentoSheet = findSheet_(ss, SHEET_NAMES.pagamento, true);
+
+  var resultadoPalpites = adicionarParticipanteNosPalpites_(palpitesSheet, participante);
+  var resultadoRanking = adicionarParticipanteNoRanking_(rankingSheet, participante);
+  var resultadoPagamento = adicionarParticipanteNoPagamento_(pagamentoSheet, participante);
+  repararRankingSheet_(rankingSheet);
+
+  SpreadsheetApp.flush();
+
+  var estrutura = readEstruturaImportacao_();
+  var participanteKey = normalizarTexto_(participante);
+  var participanteCriado = estrutura.participantes.some(function (item) {
+    return normalizarTexto_(item.nome) === participanteKey;
+  });
+  var totalAlvos = estrutura.alvos.filter(function (alvo) {
+    return normalizarTexto_(alvo.participante) === participanteKey;
+  }).length;
+
+  if (!participanteCriado || totalAlvos < estrutura.jogos.length) {
+    throw new Error(
+      "O participante foi incluído parcialmente. Verifique as abas RANKING e BOLÃO - PALPITES antes de tentar novamente."
+    );
+  }
+
+  return {
+    ok: true,
+    message:
+      participante +
+      " adicionado com sucesso em " +
+      totalAlvos +
+      " jogos, no Ranking e em Pagamentos.",
+    participante: participante,
+    jogosAdicionados: resultadoPalpites.adicionados,
+    jogosExistentes: resultadoPalpites.existentes,
+    rankingAdicionado: resultadoRanking.adicionado,
+    pagamentoAdicionado: resultadoPagamento.adicionado
+  };
+}
+
+function adicionarParticipanteNosPalpites_(sheet, participante) {
+  var values = sheet.getDataRange().getValues();
+  var blocks = findPalpiteBlocks_(values).sort(function (a, b) { return b.headerRow - a.headerRow; });
+  if (!blocks.length) throw new Error("Nenhum bloco de jogos foi encontrado na aba BOLÃO - PALPITES.");
+
+  var adicionados = 0;
+  var existentes = 0;
+
+  blocks.forEach(function (block) {
+    var existingRow = findRowByName_(values, block.headerRow + 1, block.participantCol, participante);
+    if (existingRow >= 0 && existingRow < block.resultRow) {
+      existentes += 1;
+      return;
+    }
+
+    var targetRowIndex = block.resultRow - 1;
+    var targetIsEmpty = targetRowIndex > block.headerRow && isRowEmpty_(values[targetRowIndex] || []);
+    if (!targetIsEmpty) {
+      sheet.insertRowsBefore(block.resultRow + 1, 1);
+      targetRowIndex = block.resultRow;
+    }
+
+    var sourceRowIndex = targetRowIndex - 1;
+    while (
+      sourceRowIndex > block.headerRow &&
+      (!normalizarNome_(values[sourceRowIndex] && values[sourceRowIndex][block.participantCol]) ||
+        shouldSkipParticipantName_(values[sourceRowIndex] && values[sourceRowIndex][block.participantCol]))
+    ) {
+      sourceRowIndex -= 1;
+    }
+    if (sourceRowIndex <= block.headerRow) throw new Error("Linha modelo de participante não encontrada.");
+
+    var targetRow = targetRowIndex + 1;
+    var sourceRow = sourceRowIndex + 1;
+    var width = Math.max(sheet.getLastColumn(), block.lastCol + 1);
+    sheet.getRange(sourceRow, 1, 1, width).copyTo(sheet.getRange(targetRow, 1, 1, width));
+    sheet.getRange(targetRow, block.participantCol + 1).setValue(participante);
+
+    block.gameCols.forEach(function (gameCol) {
+      sheet.getRange(targetRow, gameCol + 1).clearContent();
+    });
+
+    [block.totalCol, block.cravadasCol].forEach(function (column) {
+      if (column < 0) return;
+      var range = sheet.getRange(targetRow, column + 1);
+      if (!range.getFormula()) range.setValue(0);
+    });
+
+    adicionados += 1;
+  });
+
+  return { adicionados: adicionados, existentes: existentes };
+}
+
+function findPalpiteBlocks_(values) {
+  var blocks = [];
+
+  for (var row = 0; row < values.length; row += 1) {
+    var headers = values[row].map(function (cell) { return normalizarTexto_(cell); });
+    var participantCol = headers.indexOf("participante");
+    if (participantCol < 0) continue;
+
+    var gameCols = [];
+    for (var col = participantCol + 1; col < values[row].length; col += 1) {
+      if (looksLikeGame_(cleanString_(values[row][col]))) gameCols.push(col);
+    }
+    if (!gameCols.length) continue;
+
+    var resultRow = -1;
+    for (var nextRow = row + 1; nextRow < Math.min(values.length, row + 60); nextRow += 1) {
+      if (normalizarTexto_(values[nextRow][participantCol]) === "resultado") {
+        resultRow = nextRow;
+        break;
+      }
+    }
+    if (resultRow < 0) continue;
+
+    var totalCol = headers.indexOf("total");
+    var cravadasCol = headers.indexOf("cravadas");
+    blocks.push({
+      headerRow: row,
+      resultRow: resultRow,
+      participantCol: participantCol,
+      gameCols: gameCols,
+      totalCol: totalCol,
+      cravadasCol: cravadasCol,
+      lastCol: Math.max.apply(null, gameCols.concat([totalCol, cravadasCol].filter(function (item) { return item >= 0; })))
+    });
+  }
+
+  return blocks;
+}
+
+function adicionarParticipanteNoRanking_(sheet, participante) {
+  var values = sheet.getDataRange().getValues();
+  var headerInfo = detectHeader_(values, ["posicao", "participante", "pontos", "cravadas"]);
+  if (!headerInfo) throw new Error("Cabeçalho do Ranking não encontrado.");
+
+  var headers = headerInfo.headers;
+  var participantCols = [];
+  headers.forEach(function (header, index) {
+    if (header === "participante" || header === "nome") participantCols.push(index);
+  });
+  if (participantCols.length < 2) throw new Error("Coluna-base de participantes do Ranking não encontrada.");
+
+  var outputParticipantCol = participantCols[0];
+  var sourceParticipantCol = participantCols[participantCols.length - 1];
+  var sourcePointsCol = findColumnAfter_(headers, ["pontos", "total"], sourceParticipantCol + 1);
+  var sourceCravadasCol = findColumnAfter_(headers, ["cravadas", "placares", "exatos"], sourceParticipantCol + 1);
+  var sourceOrderCol = findColumnAfter_(headers, ["ordem"], sourceParticipantCol + 1);
+  if (sourcePointsCol < 0 || sourceCravadasCol < 0 || sourceOrderCol < 0) {
+    throw new Error("Colunas-base de pontos, cravadas e ordem não encontradas no Ranking.");
+  }
+
+  var dataStart = headerInfo.row + 1;
+  var existingRow = findRowByName_(values, dataStart, sourceParticipantCol, participante);
+  if (existingRow >= 0) return { adicionado: false, row: existingRow + 1 };
+
+  var targetRowIndex = dataStart;
+  while (targetRowIndex < values.length && normalizarNome_(values[targetRowIndex][sourceParticipantCol])) {
+    targetRowIndex += 1;
+  }
+
+  var rulesRow = values.findIndex(function (row) {
+    return normalizarTexto_(row[0]).indexOf("regras") === 0;
+  });
+  if (rulesRow >= 0 && targetRowIndex >= rulesRow) {
+    sheet.insertRowsBefore(rulesRow + 1, 1);
+    targetRowIndex = rulesRow;
+  }
+
+  var sourceRowIndex = targetRowIndex - 1;
+  if (sourceRowIndex < dataStart) throw new Error("Linha modelo do Ranking não encontrada.");
+
+  var targetRow = targetRowIndex + 1;
+  var sourceRow = sourceRowIndex + 1;
+  var lastCol = Math.max(sheet.getLastColumn(), sourceOrderCol + 1);
+  sheet.getRange(sourceRow, 1, 1, lastCol).copyTo(sheet.getRange(targetRow, 1, 1, lastCol));
+  sheet.getRange(targetRow, sourceParticipantCol + 1).setValue(participante);
+
+  var pointsRange = sheet.getRange(targetRow, sourcePointsCol + 1);
+  var cravadasRange = sheet.getRange(targetRow, sourceCravadasCol + 1);
+  if (!pointsRange.getFormula()) pointsRange.setValue(0);
+  if (!cravadasRange.getFormula()) cravadasRange.setValue(0);
+
+  return { adicionado: true, row: targetRow };
+}
+
+function repararRankingSheet_(sheet) {
+  SpreadsheetApp.flush();
+  var values = sheet.getDataRange().getValues();
+  var headerInfo = detectHeader_(values, ["posicao", "participante", "pontos", "cravadas"]);
+  if (!headerInfo) throw new Error("Cabeçalho do Ranking não encontrado.");
+
+  var headers = headerInfo.headers;
+  var participantCols = [];
+  headers.forEach(function (header, index) {
+    if (header === "participante" || header === "nome") participantCols.push(index);
+  });
+  if (participantCols.length < 2) return;
+
+  var outputPositionCol = findColumn_(headers, ["posicao", "rank"]) + 1;
+  var outputParticipantCol = participantCols[0] + 1;
+  var sourceParticipantCol = participantCols[participantCols.length - 1] + 1;
+  var sourcePointsCol = findColumnAfter_(headers, ["pontos", "total"], sourceParticipantCol) + 1;
+  var sourceCravadasCol = findColumnAfter_(headers, ["cravadas", "placares", "exatos"], sourceParticipantCol) + 1;
+  var sourceOrderCol = findColumnAfter_(headers, ["ordem"], sourceParticipantCol) + 1;
+  if (outputPositionCol < 1 || sourcePointsCol < 1 || sourceCravadasCol < 1) {
+    throw new Error("Colunas-base do Ranking não encontradas.");
+  }
+
+  var firstRow = headerInfo.row + 2;
+  var base = [];
+  for (var row = firstRow - 1; row < values.length; row += 1) {
+    var participante = normalizarNome_(values[row][sourceParticipantCol - 1]);
+    if (!participante) break;
+    base.push({
+      participante: participante,
+      pontos: toNumber_(values[row][sourcePointsCol - 1]),
+      cravadas: toNumber_(values[row][sourceCravadasCol - 1]),
+      ordem: sourceOrderCol > 0 ? toNumber_(values[row][sourceOrderCol - 1]) : row
+    });
+  }
+  if (!base.length) throw new Error("Nenhum participante encontrado na base do Ranking.");
+
+  base.sort(function (a, b) {
+    return b.pontos - a.pontos || b.cravadas - a.cravadas || b.ordem - a.ordem;
+  });
+
+  var output = base.map(function (item, index) {
+    return [index + 1, item.participante, item.pontos, item.cravadas];
+  });
+  var outputStartCol = outputPositionCol;
+  var outputWidth = outputParticipantCol - outputPositionCol + 3;
+  if (outputWidth !== 4) {
+    throw new Error("Estrutura de saída do Ranking diferente do esperado.");
+  }
+  sheet.getRange(firstRow, outputStartCol, base.length, outputWidth).clearContent();
+  sheet.getRange(firstRow, outputStartCol, output.length, 4).setValues(output);
+}
+
+function findColumnAfter_(headers, names, startCol) {
+  for (var index = startCol; index < headers.length; index += 1) {
+    var header = headers[index];
+    if (names.some(function (name) { return header.indexOf(normalizarTexto_(name)) >= 0; })) return index;
+  }
+  return -1;
+}
+
+function adicionarParticipanteNoPagamento_(sheet, participante) {
+  var values = sheet.getDataRange().getValues();
+  var headerInfo = detectHeader_(values, ["participante", "nome", "pix", "pagou", "data"]);
+  if (!headerInfo) throw new Error("Cabeçalho de Pagamentos não encontrado.");
+
+  var participantCol = findColumn_(headerInfo.headers, ["participante", "nome"]);
+  if (participantCol < 0) throw new Error("Coluna de participante não encontrada em Pagamentos.");
+
+  var dataStart = headerInfo.row + 1;
+  var existingRow = findRowByName_(values, dataStart, participantCol, participante);
+  if (existingRow >= 0) return { adicionado: false, row: existingRow + 1 };
+
+  var targetRowIndex = dataStart;
+  while (targetRowIndex < values.length && normalizarNome_(values[targetRowIndex][participantCol])) {
+    targetRowIndex += 1;
+  }
+
+  var targetRow = targetRowIndex + 1;
+  var sourceRow = Math.max(dataStart + 1, targetRow - 1);
+  var lastCol = Math.max(sheet.getLastColumn(), headerInfo.headers.length);
+  sheet.getRange(sourceRow, 1, 1, lastCol).copyTo(sheet.getRange(targetRow, 1, 1, lastCol));
+  sheet.getRange(targetRow, 1, 1, lastCol).clearContent();
+  sheet.getRange(targetRow, participantCol + 1).setValue(participante);
+
+  return { adicionado: true, row: targetRow };
 }
 
 function importarPalpitesEmLote_(payload) {
