@@ -261,9 +261,15 @@ export function ImportarPalpitesWhatsApp() {
         data: resultado.participantes.find((participante) => participante.data)?.data ?? null,
         palpites: palpitesParaEnviar
       });
-      setImportacaoConcluida(resposta);
-      showToast(resposta.message);
       await refetch();
+      if (resposta.erros.length === 0) {
+        const totalImportado = resposta.importados + resposta.atualizados;
+        showToast(`${totalImportado} palpites importados com sucesso!`);
+        limparTudo();
+      } else {
+        setImportacaoConcluida(resposta);
+        showToast(resposta.message);
+      }
     } catch (err) {
       showToast(err instanceof Error ? err.message : "Não foi possível importar os palpites.");
     } finally {
