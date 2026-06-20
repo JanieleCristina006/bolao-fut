@@ -175,7 +175,12 @@ export function Dashboard() {
         <StatCard tone="emerald" label="Finalizados" value={data.resumo.jogosFinalizados} icon={<CheckCircle2 className="h-6 w-6" aria-hidden />} />
         <StatCard tone="amber" label="Pendentes" value={data.resumo.jogosPendentes} icon={<CalendarClock className="h-6 w-6" aria-hidden />} />
         <StatCard tone="violet" label="Cravadas" value={data.resumo.totalCravadas} icon={<Target className="h-6 w-6" aria-hidden />} />
-        <StatCard tone="rose" label="Pagamentos" value={data.resumo.pagamentosConfirmados} icon={<CreditCard className="h-6 w-6" aria-hidden />} />
+        <StatCard
+          tone="rose"
+          label="Pagamentos"
+          value={`${data.resumo.pagamentosConfirmados} pagos · ${data.resumo.pagamentosIsentos ?? 0} isento${data.resumo.pagamentosIsentos === 1 ? "" : "s"}`}
+          icon={<CreditCard className="h-6 w-6" aria-hidden />}
+        />
       </section>
 
       <section className="grid gap-6 xl:grid-cols-[1fr_0.9fr]">

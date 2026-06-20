@@ -2,7 +2,7 @@ export type StatusJogo = "agendado" | "andamento" | "finalizado";
 
 export type PontuacaoTipo = "exato" | "vencedor" | "empate" | "erro" | "pendente";
 
-export type PagamentoSituacao = "pago" | "pendente";
+export type PagamentoSituacao = "pago" | "pendente" | "isento";
 
 export interface ResultadoPontuacao {
   pontos: number;
@@ -66,6 +66,7 @@ export interface ResumoDashboard {
   jogosPendentes: number;
   totalCravadas: number;
   pagamentosConfirmados: number;
+  pagamentosIsentos?: number;
   valorArrecadado: number;
   valorPendente: number;
 }

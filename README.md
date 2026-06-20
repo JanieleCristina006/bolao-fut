@@ -1,6 +1,6 @@
 # Bolão Futebol Inglês
 
-Frontend completo em React + Vite + TypeScript para transformar uma planilha de bolão em um portal esportivo moderno, responsivo e com modo demonstração.
+Frontend completo em React + Vite + TypeScript conectado em tempo real a uma planilha do Google por Google Apps Script.
 
 ## Stack
 
@@ -11,8 +11,7 @@ Frontend completo em React + Vite + TypeScript para transformar uma planilha de 
 - Lucide React
 - Fetch API
 - jsPDF e jspdf-autotable
-- Leitura direta de arquivo Excel (`.xlsx`)
-- Google Apps Script opcional para escrita administrativa
+- Google Apps Script para leitura e escrita
 - PWA instalavel com manifest e service worker
 
 ## Como executar localmente
@@ -38,26 +37,9 @@ VITE_GOOGLE_SCRIPT_API_URL=/api/sheets
 
 # URL real do Apps Script usada pelo proxy local/Netlify/Vercel.
 GOOGLE_SCRIPT_API_URL=https://script.google.com/macros/s/SEU_ID/exec
-
-# Fallback local somente leitura.
-# VITE_EXCEL_FILE_URL=/data/BOLAO_FUTEBOL_INGLESS.xlsx
 ```
 
-O arquivo Excel só precisa estar disponível para o navegador quando você quiser usar o fallback local. Neste projeto, a planilha foi copiada para:
-
-```text
-public/data/BOLAO_FUTEBOL_INGLESS.xlsx
-```
-
-Por isso, se quiser usar o fallback local, a URL é `/data/BOLAO_FUTEBOL_INGLESS.xlsx`.
-
-Prioridade das fontes de dados:
-
-1. `VITE_GOOGLE_SCRIPT_API_URL`
-2. `VITE_EXCEL_FILE_URL`
-3. `src/mocks/data.ts`
-
-Enquanto nenhuma variável existir, o app usa `src/mocks/data.ts` automaticamente.
+O aplicativo usa somente a integração com o Google Planilhas. Se a integração ainda não estiver configurada, as telas exibem o erro de conexão; nenhum dado local ou demonstrativo é usado como substituto.
 
 ## Estrutura principal
 
@@ -77,7 +59,6 @@ src/
   utils/
   types/
   constants/
-  mocks/
 google-apps-script/
   Code.gs
 ```
@@ -174,15 +155,6 @@ Leitura em tempo real com Google Apps Script:
 4. Altere algum dado na planilha do Google.
 5. Aguarde até 1 minuto ou use o botão `Atualizar dados` para buscar a mudança na hora.
 
-Quando `VITE_GOOGLE_SCRIPT_API_URL` está configurado, o botão de importar Excel local fica oculto e imports antigos salvos no navegador são ignorados.
-
-Leitura com Excel local:
-
-1. Comente `VITE_GOOGLE_SCRIPT_API_URL` no `.env`.
-2. Configure `VITE_EXCEL_FILE_URL=/data/BOLAO_FUTEBOL_INGLESS.xlsx`.
-3. Rode `npm run dev`.
-4. Abra Dashboard, Ranking, Jogos, Participantes e Pagamentos.
-
 Escrita com Google Apps Script:
 
 1. Configure `ADMIN_TOKEN` no Apps Script.
@@ -191,8 +163,6 @@ Escrita com Google Apps Script:
 4. Digite o token administrativo.
 5. Altere um pagamento.
 6. Confira se apenas a célula de status/data foi atualizada na aba `BOLÃO - PAGAMENTO`.
-
-Com `VITE_EXCEL_FILE_URL`, a planilha é lida diretamente pelo navegador e fica em modo somente leitura. Para gravar alterações em arquivo/planilha, é necessário Google Apps Script ou backend.
 
 Para resultados e palpites, o Apps Script já possui ações preparadas. A interface atual expõe edição de pagamentos e mantém as demais rotas prontas para expansão administrativa.
 
@@ -219,8 +189,7 @@ Também há botões de impressão nas páginas de Ranking e Jogos.
 5. Output directory: `dist`.
 6. Configure `VITE_GOOGLE_SCRIPT_API_URL=/api/sheets` nas variáveis de ambiente da Vercel.
 7. Configure `GOOGLE_SCRIPT_API_URL` com a URL `/exec` do Apps Script nas variáveis de ambiente da Vercel.
-8. Configure `VITE_EXCEL_FILE_URL` apenas se quiser publicar usando o Excel local somente leitura.
-9. Publique.
+8. Publique.
 
 ## Publicar na Netlify
 

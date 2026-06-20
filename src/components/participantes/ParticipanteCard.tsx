@@ -1,5 +1,5 @@
 import { Link } from "react-router-dom";
-import { ArrowRight, CheckCircle2, Clock } from "lucide-react";
+import { ArrowRight, CheckCircle2, Clock, ShieldCheck } from "lucide-react";
 import type { Participante } from "../../types";
 import { porcentagem } from "../../utils/formatadores";
 import { Badge } from "../ui/Badge";
@@ -10,6 +10,16 @@ interface ParticipanteCardProps {
 }
 
 export function ParticipanteCard({ participante }: ParticipanteCardProps) {
+  const pagamentoTone = participante.pagamento === "pago" ? "green" : participante.pagamento === "isento" ? "blue" : "yellow";
+  const pagamentoIcon =
+    participante.pagamento === "pago" ? (
+      <CheckCircle2 className="mr-1 h-3.5 w-3.5" aria-hidden />
+    ) : participante.pagamento === "isento" ? (
+      <ShieldCheck className="mr-1 h-3.5 w-3.5" aria-hidden />
+    ) : (
+      <Clock className="mr-1 h-3.5 w-3.5" aria-hidden />
+    );
+
   return (
     <Card>
       <CardBody className="space-y-4">
@@ -19,8 +29,8 @@ export function ParticipanteCard({ participante }: ParticipanteCardProps) {
             <h2 className="mt-3 break-words text-lg font-black text-slate-950">{participante.nome}</h2>
             <p className="text-sm text-slate-500">{porcentagem(participante.aproveitamento)} de aproveitamento</p>
           </div>
-          <Badge className="shrink-0" tone={participante.pagamento === "pago" ? "green" : "yellow"}>
-            {participante.pagamento === "pago" ? <CheckCircle2 className="mr-1 h-3.5 w-3.5" aria-hidden /> : <Clock className="mr-1 h-3.5 w-3.5" aria-hidden />}
+          <Badge className="shrink-0" tone={pagamentoTone}>
+            {pagamentoIcon}
             {participante.pagamento}
           </Badge>
         </div>

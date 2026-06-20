@@ -18,13 +18,14 @@ import { PIX_INFO } from "../constants";
 import { filtrarPagamentos } from "../utils/filtros";
 import { formatarMoeda } from "../utils/formatadores";
 import { gerarPdfPagamentos } from "../utils/gerarPdfPagamentos";
+import { respostaPix } from "../utils/pagamentos";
 
 function exportarCsv(pagamentos: Pagamento[]): void {
   const linhas = [
     ["Participante", "Pago", "Data", "Valor", "Situação"],
     ...pagamentos.map((pagamento) => [
       pagamento.participante,
-      pagamento.pago ? "sim" : "não",
+      respostaPix(pagamento.situacao).toLowerCase(),
       pagamento.dataPagamento ?? "",
       String(pagamento.valor),
       pagamento.situacao
@@ -60,14 +61,23 @@ export function Pagamentos() {
   }, [buscaDebounced, dataPagamento, setSearchParams, status]);
 
   const filtrado = useMemo(() => filtrarPagamentos(data ?? [], buscaDebounced, status, dataPagamento), [buscaDebounced, data, dataPagamento, status]);
-  const totalPago = filtrado.filter((pagamento) => pagamento.pago).length;
-  const totalPendente = filtrado.length - totalPago;
-  const valorArrecadado = filtrado.filter((pagamento) => pagamento.pago).reduce((total, pagamento) => total + pagamento.valor, 0);
-  const valorReceber = filtrado.filter((pagamento) => !pagamento.pago).reduce((total, pagamento) => total + pagamento.valor, 0);
+  const totalPago = filtrado.filter((pagamento) => pagamento.situacao === "pago").length;
+  const totalIsento = filtrado.filter((pagamento) => pagamento.situacao === "isento").length;
+  const totalPendente = filtrado.filter((pagamento) => pagamento.situacao === "pendente").length;
+  const valorArrecadado = filtrado
+    .filter((pagamento) => pagamento.situacao === "pago")
+    .reduce((total, pagamento) => total + pagamento.valor, 0);
+  const valorReceber = filtrado
+    .filter((pagamento) => pagamento.situacao === "pendente")
+    .reduce((total, pagamento) => total + pagamento.valor, 0);
 
   async function alterarPagamento(pagamento: Pagamento) {
+    if (pagamento.situacao === "isento") {
+      showToast("Participantes isentos não possuem cobrança de PIX.");
+      return;
+    }
     if (!isAdminWritesEnabled()) {
-      showToast("A planilha Excel direta é somente leitura. Use Google Apps Script para gravar alterações.");
+      showToast("A integração com o Google Apps Script não está disponível para gravação.");
       return;
     }
     if (!adminToken) {
@@ -109,10 +119,11 @@ export function Pagamentos() {
         </div>
       </div>
 
-      <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
+      <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-6">
         {[
           ["Participantes", filtrado.length],
           ["Total pago", totalPago],
+          ["Isentos", totalIsento],
           ["Total pendente", totalPendente],
           ["Arrecadado", formatarMoeda(valorArrecadado)],
           ["A receber", formatarMoeda(valorReceber)]
@@ -131,6 +142,7 @@ export function Pagamentos() {
         <Select value={status} onChange={(event) => setStatus(event.target.value)}>
           <option value="todos">Todos</option>
           <option value="pago">Pagos</option>
+          <option value="isento">Isentos</option>
           <option value="pendente">Pendentes</option>
         </Select>
         <Input type="date" value={dataPagamento} onChange={(event) => setDataPagamento(event.target.value)} />

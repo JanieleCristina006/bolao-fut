@@ -15,6 +15,7 @@ export function gerarPdfRelatorioGeral(data: DashboardData): void {
       ["Jogos pendentes", String(data.resumo.jogosPendentes)],
       ["Cravadas", String(data.resumo.totalCravadas)],
       ["Pagamentos confirmados", String(data.resumo.pagamentosConfirmados)],
+      ["Participantes isentos", String(data.resumo.pagamentosIsentos ?? 0)],
       ["Valor arrecadado", formatarMoeda(data.resumo.valorArrecadado)]
     ],
     styles: { fontSize: 10, cellPadding: 2 },

@@ -2,6 +2,7 @@ import autoTable from "jspdf-autotable";
 import { PIX_INFO } from "../constants";
 import type { Pagamento } from "../types";
 import { formatarData, formatarMoeda } from "./formatadores";
+import { rotuloSituacaoPagamento } from "./pagamentos";
 import { criarDocumento, salvarPdf } from "./pdfBase";
 
 export function gerarPdfPagamentos(pagamentos: Pagamento[]): void {
@@ -14,7 +15,7 @@ export function gerarPdfPagamentos(pagamentos: Pagamento[]): void {
     head: [["Participante", "Situação", "Data", "Valor"]],
     body: pagamentos.map((pagamento) => [
       pagamento.participante,
-      pagamento.situacao === "pago" ? "Pago" : "Pendente",
+      rotuloSituacaoPagamento(pagamento.situacao),
       formatarData(pagamento.dataPagamento),
       formatarMoeda(pagamento.valor)
     ]),

@@ -236,7 +236,7 @@ export function ImportarPalpitesWhatsApp() {
   async function confirmarImportacao() {
     if (!resultado) return;
     if (!adminWritesEnabled) {
-      showToast("A importação em lote exige Google Apps Script ativo. O modo Excel/mock é somente leitura.");
+      showToast("A importação em lote exige a integração ativa com o Google Apps Script.");
       return;
     }
     if (!adminToken) {

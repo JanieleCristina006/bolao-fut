@@ -70,8 +70,12 @@ export function ParticipanteDetalhes() {
           <h2 className="text-lg font-black text-slate-950">Pagamento</h2>
         </CardHeader>
         <CardBody className="flex flex-wrap items-center gap-3">
-          <Badge tone={participante.pagamento === "pago" ? "green" : "yellow"}>{participante.pagamento}</Badge>
-          <span className="text-sm text-slate-600">Data do PIX: {formatarData(participante.dataPix)}</span>
+          <Badge tone={participante.pagamento === "pago" ? "green" : participante.pagamento === "isento" ? "blue" : "yellow"}>
+            {participante.pagamento}
+          </Badge>
+          <span className="text-sm text-slate-600">
+            {participante.pagamento === "isento" ? "Sem cobrança de PIX" : `Data do PIX: ${formatarData(participante.dataPix)}`}
+          </span>
         </CardBody>
       </Card>
 

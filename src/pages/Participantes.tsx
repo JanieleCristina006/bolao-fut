@@ -69,6 +69,7 @@ export function Participantes() {
         <Select value={pagamento} onChange={(event) => setPagamento(event.target.value)}>
           <option value="todos">Todos os pagamentos</option>
           <option value="pago">Pagos</option>
+          <option value="isento">Isentos</option>
           <option value="pendente">Pendentes</option>
         </Select>
         <Select value={sort} onChange={(event) => setSort(event.target.value as ParticipanteSort)}>

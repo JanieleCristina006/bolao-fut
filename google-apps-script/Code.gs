@@ -261,8 +261,9 @@ function readSnapshot_() {
 }
 
 function buildResumo_(participantes, jogos, palpites, pagamentos) {
-  var pagos = pagamentos.filter(function (item) { return item.pago; });
-  var pendentes = pagamentos.filter(function (item) { return !item.pago; });
+  var pagos = pagamentos.filter(function (item) { return item.situacao === "pago"; });
+  var isentos = pagamentos.filter(function (item) { return item.situacao === "isento"; });
+  var pendentes = pagamentos.filter(function (item) { return item.situacao === "pendente"; });
 
   return {
     totalParticipantes: participantes.length,
@@ -270,6 +271,7 @@ function buildResumo_(participantes, jogos, palpites, pagamentos) {
     jogosPendentes: jogos.filter(function (jogo) { return jogo.status !== "finalizado"; }).length,
     totalCravadas: palpites.filter(function (palpite) { return palpite.cravada; }).length,
     pagamentosConfirmados: pagos.length,
+    pagamentosIsentos: isentos.length,
     valorArrecadado: pagos.reduce(function (total, item) { return total + Number(item.valor || 0); }, 0),
     valorPendente: pendentes.reduce(function (total, item) { return total + Number(item.valor || 0); }, 0)
   };
@@ -352,15 +354,18 @@ function readPagamentos_(ss) {
     .map(function (row) {
       var participante = normalizarNome_(row[participanteCol]);
       if (!participante) return null;
-      var pago = pagoCol >= 0 ? parseBoolean_(row[pagoCol]) : false;
-      var valor = valorCol >= 0 && toNumber_(row[valorCol]) > 0 ? toNumber_(row[valorCol]) : VALOR_PIX;
+      var statusPagamento = pagoCol >= 0 ? normalizarTexto_(row[pagoCol]) : "";
+      var isento = ["isento", "isenta", "dispensado", "dispensada"].indexOf(statusPagamento) >= 0;
+      var pago = !isento && (pagoCol >= 0 ? parseBoolean_(row[pagoCol]) : false);
+      var situacao = isento ? "isento" : pago ? "pago" : "pendente";
+      var valor = isento ? 0 : valorCol >= 0 && toNumber_(row[valorCol]) > 0 ? toNumber_(row[valorCol]) : VALOR_PIX;
 
       return {
         participante: participante,
         pago: pago,
         dataPagamento: dataCol >= 0 ? formatDateIso_(row[dataCol]) : null,
         valor: valor,
-        situacao: pago ? "pago" : "pendente"
+        situacao: situacao
       };
     })
     .filter(Boolean);
@@ -609,7 +614,7 @@ function buildParticipantes_(ranking, pagamentos) {
       palpitesEnviados: item.palpites,
       acertos: item.acertos,
       aproveitamento: item.aproveitamento,
-      pagamento: pagamento && pagamento.pago ? "pago" : "pendente",
+      pagamento: pagamento ? pagamento.situacao : "pendente",
       dataPix: pagamento ? pagamento.dataPagamento : null
     };
   });
@@ -1410,6 +1415,9 @@ function atualizarPagamento_(payload) {
 
   var targetRow = findRowByName_(values, headerInfo.row + 1, participanteCol, participante);
   if (targetRow < 0) throw new Error("Participante não encontrado na aba de pagamento.");
+  if (normalizarTexto_(values[targetRow][pagoCol]) === "isento") {
+    throw new Error("Este participante está marcado como ISENTO e não possui cobrança de PIX.");
+  }
 
   setCellValueSafe_(sheet, targetRow + 1, pagoCol + 1, payload.pago ? "SIM" : "NÃO");
   if (dataCol >= 0) {

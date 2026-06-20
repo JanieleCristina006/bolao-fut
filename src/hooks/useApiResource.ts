@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { LIVE_REFRESH_MS } from "../constants";
-import { DATA_SOURCE_CHANGE_EVENT, isLiveDataSourceActive } from "../services/api";
+import { isLiveDataSourceActive } from "../services/api";
 
 interface ApiResourceState<T> {
   data: T | null;
@@ -42,15 +42,6 @@ export function useApiResource<T>(loader: (forceRefresh?: boolean) => Promise<T>
 
   useEffect(() => {
     void carregar(false);
-  }, [carregar]);
-
-  useEffect(() => {
-    const handleDataSourceChange = () => {
-      void carregar(true);
-    };
-
-    window.addEventListener(DATA_SOURCE_CHANGE_EVENT, handleDataSourceChange);
-    return () => window.removeEventListener(DATA_SOURCE_CHANGE_EVENT, handleDataSourceChange);
   }, [carregar]);
 
   useEffect(() => {

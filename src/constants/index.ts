@@ -6,7 +6,6 @@ export const PIX_INFO = {
   texto: "PIX de R$ 10,00 até 27/06"
 };
 
-export const CACHE_TTL_MS = 1000 * 60 * 5;
 export const LIVE_REFRESH_MS = 1000 * 60;
 
 export const PAGE_SIZE = 8;
