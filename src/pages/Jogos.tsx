@@ -16,9 +16,11 @@ import { api, isAdminWritesEnabled } from "../services/api";
 import { useToast } from "../components/ui/Toast";
 import { filtrarJogos, type FiltrosJogos } from "../utils/filtros";
 import { normalizarTexto } from "../utils/formatadores";
+import { gerarImagemPalpitesDeJogo } from "../utils/gerarImagemPalpites";
 import { gerarPdfPalpitesDeJogo, gerarPdfPalpitesFiltrados, gerarPdfPalpitesParticipante } from "../utils/gerarPdfPalpites";
 
 const PAGE_SIZE_JOGOS = 4;
+type FormatoDownload = "pdf" | "imagem";
 
 function palpiteBateTipo(palpite: Palpite, tipo: FiltrosJogos["tipo"]): boolean {
   if (tipo === "todos") return true;
@@ -130,6 +132,14 @@ export function Jogos() {
     });
   }
 
+  function baixarJogo(jogo: Jogo, itens: Palpite[], formato: FormatoDownload) {
+    if (formato === "imagem") {
+      gerarImagemPalpitesDeJogo(jogo, itens);
+      return;
+    }
+    gerarPdfPalpitesDeJogo(jogo, itens);
+  }
+
   if (isLoading) return <LoadingSkeleton rows={8} />;
   if (error || !data) return <ErrorState message={error ?? "Jogos indisponíveis."} onRetry={refetch} />;
 
@@ -140,7 +150,7 @@ export function Jogos() {
           <h2 className="text-2xl font-black text-slate-950">Jogos e palpites</h2>
           <p className="text-sm text-slate-500">Pontuação calculada no frontend a partir do resultado oficial.</p>
         </div>
-        <div className="grid gap-2 no-print sm:flex sm:flex-wrap lg:justify-end">
+        <div className="grid gap-2 no-print sm:flex sm:flex-wrap sm:items-end lg:justify-end">
           <Button className="w-full sm:w-auto" variant="secondary" icon={<Printer className="h-4 w-4" aria-hidden />} onClick={() => window.print()}>
             Imprimir palpites
           </Button>
@@ -304,7 +314,7 @@ export function Jogos() {
               canEditResult={adminWritesEnabled}
               isSavingResult={savingResultId === jogo.id}
               onSaveResult={salvarResultado}
-              onPdf={(item: Jogo, itens: Palpite[]) => gerarPdfPalpitesDeJogo(item, itens)}
+              onDownload={baixarJogo}
             />
           ))}
         </div>

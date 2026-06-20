@@ -8,7 +8,10 @@ import { Badge } from "../ui/Badge";
 import { Button } from "../ui/Button";
 import { Card, CardBody, CardHeader } from "../ui/Card";
 import { Input } from "../ui/Input";
+import { Select } from "../ui/Select";
 import { Spinner } from "../ui/Spinner";
+
+type FormatoDownload = "pdf" | "imagem";
 
 interface JogoCardProps {
   jogo: Jogo;
@@ -16,7 +19,7 @@ interface JogoCardProps {
   initiallyOpen?: boolean;
   canEditResult?: boolean;
   isSavingResult?: boolean;
-  onPdf: (jogo: Jogo, palpites: Palpite[]) => void;
+  onDownload: (jogo: Jogo, palpites: Palpite[], formato: FormatoDownload) => void;
   onSaveResult?: (jogo: Jogo, resultado: string) => Promise<boolean>;
 }
 
@@ -44,12 +47,13 @@ export function JogoCard({
   initiallyOpen = false,
   canEditResult = false,
   isSavingResult = false,
-  onPdf,
+  onDownload,
   onSaveResult
 }: JogoCardProps) {
   const [open, setOpen] = useState(initiallyOpen);
   const [editingResult, setEditingResult] = useState(false);
   const [resultValue, setResultValue] = useState(jogo.resultado ?? "");
+  const [formatoDownload, setFormatoDownload] = useState<FormatoDownload>("pdf");
   const palpitesOrdenados = useMemo(
     () => [...palpites].sort((a, b) => a.participante.localeCompare(b.participante, "pt-BR")),
     [palpites]
@@ -131,9 +135,24 @@ export function JogoCard({
               </Button>
             )
           ) : null}
-          <Button className="w-full sm:w-auto" variant="secondary" icon={<Download className="h-4 w-4" aria-hidden />} onClick={() => onPdf(jogo, palpitesOrdenados)}>
-            PDF do jogo
-          </Button>
+          <div className="grid w-full grid-cols-[minmax(0,1fr)_auto] gap-2 sm:w-auto">
+            <Select
+              className="min-w-0 sm:w-36"
+              value={formatoDownload}
+              onChange={(event) => setFormatoDownload(event.target.value as FormatoDownload)}
+              aria-label={`Formato para baixar ${jogo.mandante} x ${jogo.visitante}`}
+            >
+              <option value="pdf">PDF</option>
+              <option value="imagem">Imagem (PNG)</option>
+            </Select>
+            <Button
+              variant="secondary"
+              icon={<Download className="h-4 w-4" aria-hidden />}
+              onClick={() => onDownload(jogo, palpitesOrdenados, formatoDownload)}
+            >
+              Baixar
+            </Button>
+          </div>
           <Button
             variant="ghost"
             className="w-full sm:w-auto"
