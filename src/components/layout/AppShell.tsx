@@ -6,13 +6,13 @@ import { APP_NAME } from "../../constants";
 import { cn } from "../../utils/cn";
 
 const navItems = [
-  { to: "/", label: "Dashboard", icon: LayoutDashboard },
-  { to: "/ranking", label: "Ranking", icon: Trophy },
-  { to: "/jogos", label: "Jogos", icon: ListChecks },
-  { to: "/importar-whatsapp", label: "Importar palpites", icon: ClipboardList },
-  { to: "/participantes", label: "Participantes", icon: Users },
-  { to: "/pagamentos", label: "Pagamentos", icon: CreditCard },
-  { to: "/regulamento", label: "Regulamento", icon: FileText }
+  { to: "/", label: "Dashboard", mobileLabel: "Início", icon: LayoutDashboard },
+  { to: "/ranking", label: "Ranking", mobileLabel: "Ranking", icon: Trophy },
+  { to: "/jogos", label: "Jogos", mobileLabel: "Jogos", icon: ListChecks },
+  { to: "/importar-whatsapp", label: "Importar palpites", mobileLabel: "Palpites", icon: ClipboardList },
+  { to: "/participantes", label: "Participantes", mobileLabel: "Pessoas", icon: Users },
+  { to: "/pagamentos", label: "Pagamentos", mobileLabel: "Pagto.", icon: CreditCard },
+  { to: "/regulamento", label: "Regulamento", mobileLabel: "Regras", icon: FileText }
 ];
 
 export function AppShell({ children }: { children: ReactNode }) {
@@ -47,7 +47,7 @@ export function AppShell({ children }: { children: ReactNode }) {
         </div>
       </header>
 
-      <main className="mx-auto max-w-7xl px-3 py-4 sm:px-4 sm:py-8">{children}</main>
+      <main className="mx-auto max-w-7xl px-3 pb-24 pt-4 sm:px-4 sm:pb-28 sm:pt-8 lg:pb-8">{children}</main>
 
       <nav
         className="pwa-safe-bottom fixed bottom-0 left-0 right-0 z-30 border-t border-slate-200 bg-white px-2 py-2 shadow-[0_-10px_30px_rgba(15,23,42,0.12)] lg:hidden no-print"
@@ -60,14 +60,15 @@ export function AppShell({ children }: { children: ReactNode }) {
               to={item.to}
               className={({ isActive }) =>
                 cn(
-                  "flex min-h-12 flex-col items-center justify-center gap-1 rounded-lg px-1 text-[9px] font-bold transition min-[420px]:text-[10px]",
+                  "flex min-h-14 min-w-0 flex-col items-center justify-center gap-1 rounded-lg px-0.5 text-[9px] font-bold leading-none transition min-[360px]:text-[10px]",
                   isActive ? "bg-brand-600 text-white" : "text-slate-600 hover:bg-slate-100"
                 )
               }
               aria-label={item.label}
+              title={item.label}
             >
-              <item.icon className="h-4 w-4" aria-hidden />
-              <span className="hidden min-[420px]:inline">{item.label}</span>
+              <item.icon className="h-[18px] w-[18px] shrink-0" aria-hidden />
+              <span className="block max-w-full truncate">{item.mobileLabel}</span>
             </NavLink>
           ))}
         </div>
