@@ -58,7 +58,8 @@ const jogos = [
   jogo("jogo-irq-nor", "2026-06-16", "IRQ", "NOR", "IRQ x NOR"),
   jogo("jogo-arg-agl", "2026-06-16", "ARG", "AGL", "ARG x AGL"),
   jogo("jogo-aus-jor", "2026-06-16", "\u00C1US", "JOR", "\u00C1US x JOR"),
-  jogo("jogo-australia-jor", "2026-06-16", "Australia", "JOR", "AUS x JOR")
+  jogo("jogo-australia-jor", "2026-06-16", "Australia", "JOR", "AUS x JOR"),
+  jogo("jogo-mex-afs", "2026-06-17", "México", "África do Sul", "MEX x AFS")
 ];
 
 const palpiteExistente: Palpite = {
@@ -249,6 +250,16 @@ Argentina 3 x 1 Arg\u00E9lia
       assert(importaveis.some((item) => item.jogoId === "jogo-irq-nor"), "Deveria casar Iraque/Noruega com IRQ x NOR.");
       assert(importaveis.some((item) => item.jogoId === "jogo-arg-agl"), "Deveria casar Argentina/Argelia com ARG x AGL.");
       assert(importaveis.some((item) => item.jogoId === "jogo-aus-jor"), "Deveria casar Austria/Jordania com AUS x JOR.");
+    }
+  ],
+  [
+    "sigla MEX não deve usar o X interno como separador",
+    () => {
+      const item = primeiroPalpite(`JOGO DIA 17/06
+Meus palpites (Karen Milene)
+México 2x1 África do Sul`);
+      assert(item.jogoId === "jogo-mex-afs", "Deveria reconhecer corretamente MEX x AFS.");
+      assert(item.status === "valido", "O palpite de México x África do Sul deveria ser válido.");
     }
   ]
 ];

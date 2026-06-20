@@ -184,7 +184,9 @@ function aliasesDoTime(nome: string, sigla?: string): Set<string> {
 }
 
 function siglasDaAbreviacao(abreviacao: string): [string, string] {
-  const [casa = "", fora = ""] = abreviacao.split(/\s*(?:x|-)\s*/i).map(limparEspacos);
+  const confronto = limparEspacos(abreviacao);
+  const match = confronto.match(/^(.+?)\s+[xX]\s+(.+)$/) ?? confronto.match(/^(.+?)\s*-\s*(.+)$/);
+  const [casa = "", fora = ""] = match ? [match[1], match[2]].map(limparEspacos) : [confronto, ""];
   return [casa, fora];
 }
 

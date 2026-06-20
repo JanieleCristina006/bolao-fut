@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import { NavLink } from "react-router-dom";
+import { Link, NavLink } from "react-router-dom";
 import { ClipboardList, CreditCard, FileText, LayoutDashboard, ListChecks, Trophy, Users } from "lucide-react";
 import { InstallPwaPrompt } from "../pwa/InstallPwaPrompt";
 import { APP_NAME } from "../../constants";
@@ -17,7 +17,7 @@ const navItems = [
 
 export function AppShell({ children }: { children: ReactNode }) {
   return (
-    <div className="min-h-screen bg-slate-100">
+    <div className="flex min-h-screen flex-col bg-slate-100">
       <header className="pwa-safe-top sticky top-0 z-30 border-b border-slate-800 bg-slate-950 text-white no-print">
         <div className="mx-auto flex max-w-7xl items-center justify-between gap-3 px-3 py-3 sm:px-4 sm:py-4">
           <NavLink to="/" className="flex min-w-0 items-center gap-2 sm:gap-3">
@@ -47,7 +47,33 @@ export function AppShell({ children }: { children: ReactNode }) {
         </div>
       </header>
 
-      <main className="mx-auto max-w-7xl px-3 pb-24 pt-4 sm:px-4 sm:pb-28 sm:pt-8 lg:pb-8">{children}</main>
+      <main className="mx-auto w-full max-w-7xl flex-1 px-3 pb-8 pt-4 sm:px-4 sm:pt-8">{children}</main>
+
+      <footer className="border-t border-slate-800 bg-slate-950 pb-24 text-slate-300 no-print lg:pb-0">
+        <div className="mx-auto max-w-7xl px-4 py-6 sm:py-8">
+          <div className="flex flex-col gap-6 sm:flex-row sm:items-center sm:justify-between">
+            <Link to="/" className="flex items-center gap-3">
+              <img src="/logo.jpg" alt="" className="h-12 w-12 rounded-lg object-cover ring-1 ring-white/10" />
+              <div>
+                <strong className="block text-base font-black text-white">{APP_NAME}</strong>
+                <span className="text-sm text-slate-400">Futebol Inglês Brasil</span>
+              </div>
+            </Link>
+
+            <nav className="flex flex-wrap gap-x-5 gap-y-2 text-sm font-semibold" aria-label="Links do rodapé">
+              <Link to="/ranking" className="transition hover:text-white">Ranking</Link>
+              <Link to="/jogos" className="transition hover:text-white">Jogos</Link>
+              <Link to="/participantes" className="transition hover:text-white">Participantes</Link>
+              <Link to="/regulamento" className="transition hover:text-white">Regulamento</Link>
+            </nav>
+          </div>
+
+          <div className="mt-6 border-t border-slate-800 pt-4 text-xs text-slate-500 sm:flex sm:items-center sm:justify-between">
+            <p>© {new Date().getFullYear()} {APP_NAME}. Todos os direitos reservados.</p>
+            <p className="mt-1 sm:mt-0">Feito para acompanhar cada palpite.</p>
+          </div>
+        </div>
+      </footer>
 
       <nav
         className="pwa-safe-bottom fixed bottom-0 left-0 right-0 z-30 border-t border-slate-200 bg-white px-2 py-2 shadow-[0_-10px_30px_rgba(15,23,42,0.12)] lg:hidden no-print"

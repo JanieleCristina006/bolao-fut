@@ -18,6 +18,7 @@ const SCORE_COLORS = {
 
 const TEAM_NAMES = {
   AFS: "África do Sul",
+  AFR: "África do Sul",
   AGL: "Argélia",
   ALG: "Argélia",
   ALE: "Alemanha",
@@ -394,8 +395,8 @@ function readJogosTabela_(ss) {
     .slice(headerInfo.row + 1)
     .filter(function (row) { return !isRowEmpty_(row); })
     .map(function (row, index) {
-      var mandante = normalizarNome_(row[mandanteCol]);
-      var visitante = normalizarNome_(row[visitanteCol]);
+      var mandante = nomeCompletoTime_(row[mandanteCol]);
+      var visitante = nomeCompletoTime_(row[visitanteCol]);
       if (!mandante || !visitante) return null;
 
       var abreviacao = sigla_(mandante) + " x " + sigla_(visitante);
@@ -1297,11 +1298,18 @@ function findJogoByTimes_(jogos, payload) {
 }
 
 function splitGameAbreviacao_(abreviacao) {
-  var parts = String(abreviacao || "").split(/\s*(?:x|-)\s*/i);
+  var parts = separarTimesJogo_(abreviacao);
   return {
     home: normalizarNome_(parts[0]),
     away: normalizarNome_(parts[1])
   };
+}
+
+function separarTimesJogo_(value) {
+  var text = cleanString_(value).replace(/\s+/g, " ");
+  var match = text.match(/^(.+?)\s+[xX]\s+(.+)$/);
+  if (!match) match = text.match(/^(.+?)\s*-\s*(.+)$/);
+  return match ? [match[1], match[2]] : [text, ""];
 }
 
 function teamsEquivalent_(left, right, rightSigla) {
@@ -1541,7 +1549,7 @@ function looksLikeGame_(text) {
 }
 
 function parseGameText_(text) {
-  var parts = String(text).split(/\s*(?:x|X|-)\s*/);
+  var parts = separarTimesJogo_(text);
   var homeRaw = cleanString_(parts[0]);
   var awayRaw = cleanString_(parts[1]);
   var home = normalizarTexto_(homeRaw).toUpperCase();
@@ -1555,6 +1563,17 @@ function parseGameText_(text) {
     visitante: TEAM_NAMES[away] || awayRaw,
     abreviacao: home + " x " + away
   };
+}
+
+function nomeCompletoTime_(value) {
+  var raw = normalizarNome_(value);
+  if (!raw) return "";
+
+  var key = normalizarTexto_(raw).replace(/[^a-z0-9]/g, "").toUpperCase();
+  if (key === "AFRICADOSUL") key = "AFS";
+  if (key === "MEXICO") key = "MEX";
+
+  return TEAM_NAMES[key] || raw;
 }
 
 function parseDay_(value) {

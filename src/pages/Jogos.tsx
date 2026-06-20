@@ -17,7 +17,7 @@ import { useToast } from "../components/ui/Toast";
 import { filtrarJogos, type FiltrosJogos } from "../utils/filtros";
 import { normalizarTexto } from "../utils/formatadores";
 import { gerarImagemPalpitesDeJogo } from "../utils/gerarImagemPalpites";
-import { gerarImagemPalpitesFiltrados, gerarImagemPalpitesParticipante } from "../utils/gerarImagemRelatorios";
+import { gerarImagemPalpitesParticipante, gerarZipImagensPalpitesFiltrados } from "../utils/gerarImagemRelatorios";
 import { gerarPdfPalpitesDeJogo, gerarPdfPalpitesFiltrados, gerarPdfPalpitesParticipante } from "../utils/gerarPdfPalpites";
 
 const PAGE_SIZE_JOGOS = 4;
@@ -40,12 +40,12 @@ export function Jogos() {
   const [filtros, setFiltros] = useState<FiltrosJogos>({
     participante: searchParams.get("participante") ?? "",
     dia: searchParams.get("dia") ?? "",
-    rodada: searchParams.get("rodada") ?? "",
+    rodada: "",
     jogo: searchParams.get("jogo") ?? "",
     selecao: searchParams.get("selecao") ?? "",
-    status: searchParams.get("status") ?? "todos",
-    resultado: searchParams.get("resultado") ?? "todos",
-    tipo: (searchParams.get("tipo") as FiltrosJogos["tipo"]) ?? "todos"
+    status: "todos",
+    resultado: "todos",
+    tipo: "todos"
   });
   const [page, setPage] = useState(Number(searchParams.get("page") ?? "1"));
   const participanteDebounced = useDebounce(filtros.participante);
@@ -73,7 +73,6 @@ export function Jogos() {
   const jogos = data?.jogos ?? [];
   const palpites = data?.palpites ?? [];
   const dias = Array.from(new Set(jogos.map((jogo) => jogo.dia)));
-  const rodadas = Array.from(new Set(jogos.map((jogo) => jogo.rodada)));
 
   const palpitesFiltrados = useMemo(() => {
     const termo = normalizarTexto(participanteDebounced);
@@ -133,6 +132,37 @@ export function Jogos() {
     });
   }
 
+  function dadosFiltradosParaDownload() {
+    const termoParticipante = normalizarTexto(filtros.participante);
+    const palpitesDoDownload = palpites.filter((palpite) => {
+      const bateParticipante = !termoParticipante || normalizarTexto(palpite.participante).includes(termoParticipante);
+      return bateParticipante && palpiteBateTipo(palpite, filtros.tipo);
+    });
+    const idsComPalpite = new Set(palpitesDoDownload.map((palpite) => palpite.jogoId));
+    const jogosDoDownload = filtrarJogos(jogos, filtros, (jogo) => idsComPalpite.has(jogo.id));
+
+    return {
+      jogos: filtros.tipo === "todos" && !termoParticipante
+        ? jogosDoDownload
+        : jogosDoDownload.filter((jogo) => idsComPalpite.has(jogo.id)),
+      palpites: palpitesDoDownload
+    };
+  }
+
+  function baixarFiltradosEmPdf() {
+    const dados = dadosFiltradosParaDownload();
+    gerarPdfPalpitesFiltrados(dados.jogos, dados.palpites);
+  }
+
+  async function baixarFiltradosEmPng() {
+    const dados = dadosFiltradosParaDownload();
+    try {
+      await gerarZipImagensPalpitesFiltrados(dados.jogos, dados.palpites);
+    } catch {
+      showToast("Não foi possível gerar o ZIP com as imagens.");
+    }
+  }
+
   function baixarJogo(jogo: Jogo, itens: Palpite[], formato: FormatoDownload) {
     if (formato === "imagem") {
       gerarImagemPalpitesDeJogo(jogo, itens);
@@ -173,11 +203,11 @@ export function Jogos() {
           >
             PNG participante
           </Button>
-          <Button className="w-full sm:w-auto" icon={<Download className="h-4 w-4" aria-hidden />} onClick={() => gerarPdfPalpitesFiltrados(jogosFiltrados, palpitesFiltrados)}>
+          <Button className="w-full sm:w-auto" icon={<Download className="h-4 w-4" aria-hidden />} onClick={baixarFiltradosEmPdf}>
             PDF filtrado
           </Button>
-          <Button className="w-full sm:w-auto" variant="secondary" icon={<Download className="h-4 w-4" aria-hidden />} onClick={() => gerarImagemPalpitesFiltrados(jogosFiltrados, palpitesFiltrados)}>
-            PNG filtrado
+          <Button className="w-full sm:w-auto" variant="secondary" icon={<Download className="h-4 w-4" aria-hidden />} onClick={() => void baixarFiltradosEmPng()}>
+            ZIP com PNGs
           </Button>
         </div>
       </div>
@@ -236,48 +266,6 @@ export function Jogos() {
                 {dia}
               </option>
             ))}
-          </Select>
-        </label>
-
-        <label className="min-w-0 space-y-1">
-          <span className="text-xs font-semibold text-slate-500">Rodada</span>
-          <Select className="min-w-0" value={filtros.rodada} onChange={(event) => setFiltros((current) => ({ ...current, rodada: event.target.value }))}>
-            <option value="">Todas as rodadas</option>
-            {rodadas.map((rodada) => (
-              <option key={rodada} value={rodada}>
-                {rodada}
-              </option>
-            ))}
-          </Select>
-        </label>
-
-        <label className="min-w-0 space-y-1">
-          <span className="text-xs font-semibold text-slate-500">Status</span>
-          <Select className="min-w-0" value={filtros.status} onChange={(event) => setFiltros((current) => ({ ...current, status: event.target.value }))}>
-            <option value="todos">Todos os status</option>
-            <option value="agendado">Agendado</option>
-            <option value="andamento">Em andamento</option>
-            <option value="finalizado">Finalizado</option>
-          </Select>
-        </label>
-
-        <label className="min-w-0 space-y-1">
-          <span className="text-xs font-semibold text-slate-500">Com resultado</span>
-          <Select className="min-w-0" value={filtros.resultado} onChange={(event) => setFiltros((current) => ({ ...current, resultado: event.target.value }))}>
-            <option value="todos">Todos</option>
-            <option value="com">Com resultado</option>
-            <option value="sem">Sem resultado</option>
-          </Select>
-        </label>
-
-        <label className="min-w-0 space-y-1">
-          <span className="text-xs font-semibold text-slate-500">Tipo de palpite</span>
-          <Select className="min-w-0" value={filtros.tipo} onChange={(event) => setFiltros((current) => ({ ...current, tipo: event.target.value as FiltrosJogos["tipo"] }))}>
-            <option value="todos">Todos os palpites</option>
-            <option value="exato">Somente cravados</option>
-            <option value="pontuado">Somente pontuados</option>
-            <option value="erro">Somente errados</option>
-            <option value="pendente">Aguardando resultado</option>
           </Select>
         </label>
 

@@ -1,7 +1,14 @@
 import { PIX_INFO, PONTUACAO_LABELS } from "../constants";
 import type { DashboardData, Jogo, Pagamento, Palpite, ParticipanteDetalhe, RankingItem } from "../types";
 import { formatarData, formatarMoeda, porcentagem } from "./formatadores";
-import { baixarTabelaComoImagem, nomeSeguro } from "./gerarImagemPalpites";
+import {
+  baixarTabelaComoImagem,
+  criarTabelaPalpitesDeJogo,
+  gerarArquivosTabelaComoImagem,
+  nomeSeguro,
+  tomDoPalpite
+} from "./gerarImagemPalpites";
+import { baixarBlob, criarArquivoZip } from "./criarZip";
 import { rotuloSituacaoPagamento } from "./pagamentos";
 
 export function gerarImagemRelatorioGeral(data: DashboardData): void {
@@ -90,35 +97,23 @@ export function gerarImagemParticipante(participante: ParticipanteDetalhe, jogos
         palpite ? PONTUACAO_LABELS[palpite.tipo] : "Sem palpite"
       ];
     }),
+    tonsLinhas: jogos.map((jogo) => tomDoPalpite(participante.palpites.find((item) => item.jogoId === jogo.id))),
     nomeArquivo: `relatorio-${nomeSeguro(participante.nome)}`
   });
 }
 
-export function gerarImagemPalpitesFiltrados(jogos: Jogo[], palpites: Palpite[]): void {
-  baixarTabelaComoImagem({
-    titulo: "Palpites filtrados",
-    colunas: [
-      { titulo: "Jogo", largura: 0.24 },
-      { titulo: "Data", largura: 0.16 },
-      { titulo: "Resultado", largura: 0.12 },
-      { titulo: "Participante", largura: 0.23 },
-      { titulo: "Palpite", largura: 0.12 },
-      { titulo: "Pontos", largura: 0.13 }
-    ],
-    linhas: jogos.flatMap((jogo) =>
-      palpites
-        .filter((palpite) => palpite.jogoId === jogo.id)
-        .map((palpite) => [
-          `${jogo.mandante} x ${jogo.visitante}`,
-          `${formatarData(jogo.data)} ${jogo.horario}`,
-          jogo.resultado ?? "pendente",
-          palpite.participante,
-          palpite.palpite || "-",
-          String(palpite.pontos)
-        ])
-    ),
-    nomeArquivo: "palpites-filtrados-bolao"
-  });
+export async function gerarZipImagensPalpitesFiltrados(jogos: Jogo[], palpites: Palpite[]): Promise<void> {
+  const arquivos = [];
+
+  for (const [indice, jogo] of jogos.entries()) {
+    const palpitesDoJogo = palpites.filter((palpite) => palpite.jogoId === jogo.id);
+    const imagens = await gerarArquivosTabelaComoImagem(criarTabelaPalpitesDeJogo(jogo, palpitesDoJogo));
+    const prefixo = String(indice + 1).padStart(2, "0");
+    arquivos.push(...imagens.map((imagem) => ({ ...imagem, nome: `${prefixo}-${imagem.nome}` })));
+  }
+
+  const zip = await criarArquivoZip(arquivos);
+  baixarBlob(zip, "palpites-filtrados-por-jogo.zip");
 }
 
 export function gerarImagemPalpitesParticipante(nome: string, jogos: Jogo[], palpites: Palpite[]): void {
@@ -143,6 +138,9 @@ export function gerarImagemPalpitesParticipante(nome: string, jogos: Jogo[], pal
         palpite ? PONTUACAO_LABELS[palpite.tipo] : "Sem palpite"
       ];
     }),
+    tonsLinhas: jogos.map((jogo) =>
+      tomDoPalpite(palpites.find((item) => item.jogoId === jogo.id && item.participante === nome))
+    ),
     nomeArquivo: `palpites-${nomeSeguro(nome)}`
   });
 }
