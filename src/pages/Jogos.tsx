@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { Download, KeyRound, Printer, RotateCcw } from "lucide-react";
+import { ChevronDown, ChevronUp, Download, Filter, KeyRound, Printer, RotateCcw, Search } from "lucide-react";
 import { useSearchParams } from "react-router-dom";
 import { JogoCard } from "../components/jogos/JogoCard";
 import { Button } from "../components/ui/Button";
@@ -33,6 +33,7 @@ export function Jogos() {
   const [searchParams, setSearchParams] = useSearchParams();
   const [savingResultId, setSavingResultId] = useState<string | null>(null);
   const [adminToken, setAdminToken] = useState(window.sessionStorage.getItem("bolao-admin-token") ?? "");
+  const [mobileFiltersOpen, setMobileFiltersOpen] = useState(false);
   const [filtros, setFiltros] = useState<FiltrosJogos>({
     participante: searchParams.get("participante") ?? "",
     dia: searchParams.get("dia") ?? "",
@@ -116,6 +117,19 @@ export function Jogos() {
     }
   }
 
+  function limparFiltros() {
+    setFiltros({
+      participante: "",
+      dia: "",
+      rodada: "",
+      jogo: "",
+      selecao: "",
+      status: "todos",
+      resultado: "todos",
+      tipo: "todos"
+    });
+  }
+
   if (isLoading) return <LoadingSkeleton rows={8} />;
   if (error || !data) return <ErrorState message={error ?? "Jogos indisponíveis."} onRetry={refetch} />;
 
@@ -145,67 +159,136 @@ export function Jogos() {
         </div>
       </div>
 
-      <div className="grid gap-3 rounded-lg border border-slate-200 bg-white p-4 shadow-soft no-print md:grid-cols-3 xl:grid-cols-5">
-        <Input value={filtros.participante} onChange={(event) => setFiltros((current) => ({ ...current, participante: event.target.value }))} placeholder="Buscar participante" />
-        <Input value={filtros.jogo} onChange={(event) => setFiltros((current) => ({ ...current, jogo: event.target.value }))} placeholder="Filtrar por jogo" />
-        <Input value={filtros.selecao} onChange={(event) => setFiltros((current) => ({ ...current, selecao: event.target.value }))} placeholder="Filtrar por seleção" />
-        <Select value={filtros.dia} onChange={(event) => setFiltros((current) => ({ ...current, dia: event.target.value }))}>
-          <option value="">Todos os dias</option>
-          {dias.map((dia) => (
-            <option key={dia} value={dia}>
-              {dia}
-            </option>
-          ))}
-        </Select>
-        <Select value={filtros.rodada} onChange={(event) => setFiltros((current) => ({ ...current, rodada: event.target.value }))}>
-          <option value="">Todas as rodadas</option>
-          {rodadas.map((rodada) => (
-            <option key={rodada} value={rodada}>
-              {rodada}
-            </option>
-          ))}
-        </Select>
-        <Select value={filtros.status} onChange={(event) => setFiltros((current) => ({ ...current, status: event.target.value }))}>
-          <option value="todos">Todos os status</option>
-          <option value="agendado">Agendado</option>
-          <option value="andamento">Em andamento</option>
-          <option value="finalizado">Finalizado</option>
-        </Select>
-        <Select value={filtros.resultado} onChange={(event) => setFiltros((current) => ({ ...current, resultado: event.target.value }))}>
-          <option value="todos">Com e sem resultado</option>
-          <option value="com">Somente com resultado</option>
-          <option value="sem">Somente sem resultado</option>
-        </Select>
-        <Select value={filtros.tipo} onChange={(event) => setFiltros((current) => ({ ...current, tipo: event.target.value as FiltrosJogos["tipo"] }))}>
-          <option value="todos">Todos os palpites</option>
-          <option value="exato">Somente cravados</option>
-          <option value="pontuado">Somente pontuados</option>
-          <option value="erro">Somente errados</option>
-          <option value="pendente">Aguardando resultado</option>
-        </Select>
-        <Button
-          variant="ghost"
-          className="w-full"
-          icon={<RotateCcw className="h-4 w-4" aria-hidden />}
-          onClick={() => setFiltros({ participante: "", dia: "", rodada: "", jogo: "", selecao: "", status: "todos", resultado: "todos", tipo: "todos" })}
+      <div className="space-y-3 no-print md:hidden">
+        <div className="relative">
+          <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" aria-hidden />
+          <Input
+            className="pl-9"
+            value={filtros.participante}
+            onChange={(event) => setFiltros((current) => ({ ...current, participante: event.target.value }))}
+            placeholder="Buscar participante"
+            aria-label="Buscar participante"
+          />
+        </div>
+
+        <button
+          type="button"
+          className="flex min-h-11 w-full items-center justify-between rounded-lg border border-slate-300 bg-white px-3 text-sm font-semibold text-slate-700 shadow-sm transition hover:bg-slate-50 focus:outline-none focus:ring-4 focus:ring-slate-200"
+          aria-expanded={mobileFiltersOpen}
+          aria-controls="filtros-jogos"
+          onClick={() => setMobileFiltersOpen((current) => !current)}
         >
+          <span className="flex items-center gap-2">
+            <Filter className="h-4 w-4 text-brand-600" aria-hidden />
+            {mobileFiltersOpen ? "Ocultar filtros" : "Abrir filtros"}
+          </span>
+          {mobileFiltersOpen ? <ChevronUp className="h-4 w-4" aria-hidden /> : <ChevronDown className="h-4 w-4" aria-hidden />}
+        </button>
+      </div>
+
+      <div
+        id="filtros-jogos"
+        className={`${mobileFiltersOpen ? "grid" : "hidden"} grid-cols-2 gap-3 rounded-lg border border-slate-200 bg-white p-4 shadow-soft no-print md:grid md:grid-cols-3 xl:grid-cols-5`}
+      >
+        <label className="hidden min-w-0 space-y-1 md:block">
+          <span className="text-xs font-semibold text-slate-500">Participante</span>
+          <Input
+            value={filtros.participante}
+            onChange={(event) => setFiltros((current) => ({ ...current, participante: event.target.value }))}
+            placeholder="Buscar participante"
+          />
+        </label>
+
+        <label className="col-span-2 min-w-0 space-y-1 md:col-span-1">
+          <span className="text-xs font-semibold text-slate-500">Jogo</span>
+          <Input value={filtros.jogo} onChange={(event) => setFiltros((current) => ({ ...current, jogo: event.target.value }))} placeholder="Filtrar por jogo" />
+        </label>
+
+        <label className="min-w-0 space-y-1">
+          <span className="text-xs font-semibold text-slate-500">Dia</span>
+          <Select className="min-w-0" value={filtros.dia} onChange={(event) => setFiltros((current) => ({ ...current, dia: event.target.value }))}>
+            <option value="">Todos os dias</option>
+            {dias.map((dia) => (
+              <option key={dia} value={dia}>
+                {dia}
+              </option>
+            ))}
+          </Select>
+        </label>
+
+        <label className="min-w-0 space-y-1">
+          <span className="text-xs font-semibold text-slate-500">Rodada</span>
+          <Select className="min-w-0" value={filtros.rodada} onChange={(event) => setFiltros((current) => ({ ...current, rodada: event.target.value }))}>
+            <option value="">Todas as rodadas</option>
+            {rodadas.map((rodada) => (
+              <option key={rodada} value={rodada}>
+                {rodada}
+              </option>
+            ))}
+          </Select>
+        </label>
+
+        <label className="min-w-0 space-y-1">
+          <span className="text-xs font-semibold text-slate-500">Status</span>
+          <Select className="min-w-0" value={filtros.status} onChange={(event) => setFiltros((current) => ({ ...current, status: event.target.value }))}>
+            <option value="todos">Todos os status</option>
+            <option value="agendado">Agendado</option>
+            <option value="andamento">Em andamento</option>
+            <option value="finalizado">Finalizado</option>
+          </Select>
+        </label>
+
+        <label className="min-w-0 space-y-1">
+          <span className="text-xs font-semibold text-slate-500">Com resultado</span>
+          <Select className="min-w-0" value={filtros.resultado} onChange={(event) => setFiltros((current) => ({ ...current, resultado: event.target.value }))}>
+            <option value="todos">Todos</option>
+            <option value="com">Com resultado</option>
+            <option value="sem">Sem resultado</option>
+          </Select>
+        </label>
+
+        <label className="min-w-0 space-y-1">
+          <span className="text-xs font-semibold text-slate-500">Tipo de palpite</span>
+          <Select className="min-w-0" value={filtros.tipo} onChange={(event) => setFiltros((current) => ({ ...current, tipo: event.target.value as FiltrosJogos["tipo"] }))}>
+            <option value="todos">Todos os palpites</option>
+            <option value="exato">Somente cravados</option>
+            <option value="pontuado">Somente pontuados</option>
+            <option value="erro">Somente errados</option>
+            <option value="pendente">Aguardando resultado</option>
+          </Select>
+        </label>
+
+        <label className="min-w-0 space-y-1">
+          <span className="text-xs font-semibold text-slate-500">Seleção</span>
+          <Input value={filtros.selecao} onChange={(event) => setFiltros((current) => ({ ...current, selecao: event.target.value }))} placeholder="Filtrar seleção" />
+        </label>
+
+        <Button variant="ghost" className="w-full self-end" icon={<RotateCcw className="h-4 w-4" aria-hidden />} onClick={limparFiltros}>
           Limpar filtros
         </Button>
+
+        <Button className="w-full self-end md:hidden" onClick={() => setMobileFiltersOpen(false)}>
+          Aplicar filtros
+        </Button>
+
         {adminWritesEnabled ? (
-          <div className="relative md:col-span-2 xl:col-span-1">
-            <KeyRound className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" aria-hidden />
-            <Input
-              className="pl-9"
-              type="password"
-              value={adminToken}
-              onChange={(event) => {
-                setAdminToken(event.target.value);
-                window.sessionStorage.setItem("bolao-admin-token", event.target.value);
-              }}
-              placeholder="Token para editar resultados"
-              aria-label="Token administrativo"
-            />
-          </div>
+          <label className="relative col-span-2 space-y-1 md:col-span-2 xl:col-span-1">
+            <span className="text-xs font-semibold text-slate-500">Acesso administrativo</span>
+            <span className="relative block">
+              <KeyRound className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" aria-hidden />
+              <Input
+                className="pl-9"
+                type="password"
+                value={adminToken}
+                onChange={(event) => {
+                  setAdminToken(event.target.value);
+                  window.sessionStorage.setItem("bolao-admin-token", event.target.value);
+                }}
+                placeholder="Token para editar resultados"
+                aria-label="Token administrativo"
+              />
+            </span>
+          </label>
         ) : null}
       </div>
 

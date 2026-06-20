@@ -250,11 +250,15 @@ export function Dashboard() {
           <CardBody className="space-y-3">
             {ultimosResultados.map((jogo) => (
               <div key={jogo.id} className="flex items-center justify-between gap-3 rounded-lg border border-emerald-100 bg-emerald-50/40 p-3">
-                <div>
-                  <strong className="text-slate-950">{jogo.abreviacao}</strong>
+                <div className="min-w-0 flex-1">
+                  <strong className="block break-words leading-snug text-slate-950">
+                    {jogo.mandante} x {jogo.visitante}
+                  </strong>
                   <p className="text-sm text-slate-500">{formatarData(jogo.data)}</p>
                 </div>
-                <Badge tone="green">{jogo.resultado}</Badge>
+                <div className="shrink-0">
+                  <Badge tone="green">{jogo.resultado}</Badge>
+                </div>
               </div>
             ))}
           </CardBody>
