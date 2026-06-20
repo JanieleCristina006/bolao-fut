@@ -10,6 +10,7 @@ import { LoadingSkeleton } from "../components/ui/LoadingSkeleton";
 import { api } from "../services/api";
 import type { Jogo, ParticipanteDetalhe } from "../types";
 import { formatarData, porcentagem } from "../utils/formatadores";
+import { gerarImagemParticipante } from "../utils/gerarImagemRelatorios";
 import { gerarPdfParticipante } from "../utils/gerarPdfParticipante";
 import { useApiResource } from "../hooks/useApiResource";
 
@@ -43,9 +44,14 @@ export function ParticipanteDetalhes() {
           <h2 className="mt-3 text-2xl font-black text-slate-950">{participante.nome}</h2>
           <p className="text-sm text-slate-500">Histórico completo de palpites e pagamento.</p>
         </div>
-        <Button className="w-full sm:w-auto" icon={<Download className="h-4 w-4" aria-hidden />} onClick={() => gerarPdfParticipante(participante, jogos)}>
-          Baixar relatório individual em PDF
-        </Button>
+        <div className="grid gap-2 sm:flex sm:flex-wrap">
+          <Button className="w-full sm:w-auto" icon={<Download className="h-4 w-4" aria-hidden />} onClick={() => gerarPdfParticipante(participante, jogos)}>
+            Baixar relatório em PDF
+          </Button>
+          <Button className="w-full sm:w-auto" variant="secondary" icon={<Download className="h-4 w-4" aria-hidden />} onClick={() => gerarImagemParticipante(participante, jogos)}>
+            Baixar relatório em PNG
+          </Button>
+        </div>
       </div>
 
       <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-5">

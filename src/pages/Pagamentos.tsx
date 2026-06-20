@@ -17,6 +17,7 @@ import type { Pagamento } from "../types";
 import { PIX_INFO } from "../constants";
 import { filtrarPagamentos } from "../utils/filtros";
 import { formatarMoeda } from "../utils/formatadores";
+import { gerarImagemPagamentos } from "../utils/gerarImagemRelatorios";
 import { gerarPdfPagamentos } from "../utils/gerarPdfPagamentos";
 import { respostaPix } from "../utils/pagamentos";
 
@@ -115,6 +116,9 @@ export function Pagamentos() {
           </Button>
           <Button className="w-full sm:w-auto" icon={<Download className="h-4 w-4" aria-hidden />} onClick={() => gerarPdfPagamentos(filtrado)}>
             Exportar pagamentos em PDF
+          </Button>
+          <Button className="w-full sm:w-auto" variant="secondary" icon={<Download className="h-4 w-4" aria-hidden />} onClick={() => gerarImagemPagamentos(filtrado)}>
+            Exportar pagamentos em PNG
           </Button>
         </div>
       </div>

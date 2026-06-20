@@ -2,7 +2,7 @@ import { APP_NAME, PONTUACAO_LABELS } from "../constants";
 import type { Jogo, Palpite } from "../types";
 import { formatarData, formatarDataHora } from "./formatadores";
 
-interface TabelaImagem {
+export interface TabelaImagem {
   titulo: string;
   subtitulo?: string;
   colunas: Array<{ titulo: string; largura: number }>;
@@ -19,7 +19,7 @@ const FOOTER_HEIGHT = 52;
 const CELL_PADDING = 12;
 const LINE_HEIGHT = 24;
 
-function nomeSeguro(valor: string): string {
+export function nomeSeguro(valor: string): string {
   return valor
     .normalize("NFD")
     .replace(/\p{Diacritic}/gu, "")
@@ -169,7 +169,7 @@ function desenharPagina(
   return canvas;
 }
 
-function baixarTabelaComoImagem(tabela: TabelaImagem): void {
+export function baixarTabelaComoImagem(tabela: TabelaImagem): void {
   const canvasMedicao = document.createElement("canvas");
   const contextoMedicao = canvasMedicao.getContext("2d");
   if (!contextoMedicao) throw new Error("Não foi possível preparar a imagem.");

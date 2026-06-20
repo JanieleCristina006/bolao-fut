@@ -16,6 +16,7 @@ import { useDashboard } from "../hooks/useDashboard";
 import { isPwaInstalled, openPwaInstallPrompt, PWA_INSTALL_STATE_CHANGE_EVENT } from "../pwa";
 import { api, isAdminWritesEnabled } from "../services/api";
 import { formatarData, formatarDataHora } from "../utils/formatadores";
+import { gerarImagemRelatorioGeral } from "../utils/gerarImagemRelatorios";
 import { gerarPdfRelatorioGeral } from "../utils/gerarPdfRelatorioGeral";
 
 export function Dashboard() {
@@ -116,7 +117,10 @@ export function Dashboard() {
               </Button>
             ) : null}
             <Button className="w-full sm:w-auto" variant="primary" icon={<Download className="h-4 w-4" aria-hidden />} onClick={() => gerarPdfRelatorioGeral(data)}>
-              Relatório geral
+              Relatório geral PDF
+            </Button>
+            <Button className="w-full sm:w-auto" variant="secondary" icon={<Download className="h-4 w-4" aria-hidden />} onClick={() => gerarImagemRelatorioGeral(data)}>
+              Relatório geral PNG
             </Button>
           </div>
         </div>

@@ -15,6 +15,7 @@ import { useRanking } from "../hooks/useRanking";
 import type { RankingItem } from "../types";
 import { filtrarRanking } from "../utils/filtros";
 import { normalizarTexto } from "../utils/formatadores";
+import { gerarImagemRanking } from "../utils/gerarImagemRelatorios";
 import { gerarPdfRanking } from "../utils/gerarPdfRanking";
 
 type RankingSort = "posicao" | "nome" | "pontos" | "cravadas";
@@ -74,6 +75,9 @@ export function Ranking() {
           </Button>
           <Button className="w-full sm:w-auto" icon={<Download className="h-4 w-4" aria-hidden />} onClick={() => gerarPdfRanking(filtrado)}>
             Baixar ranking em PDF
+          </Button>
+          <Button className="w-full sm:w-auto" variant="secondary" icon={<Download className="h-4 w-4" aria-hidden />} onClick={() => gerarImagemRanking(filtrado)}>
+            Baixar ranking em PNG
           </Button>
         </div>
       </div>

@@ -17,6 +17,7 @@ import { useToast } from "../components/ui/Toast";
 import { filtrarJogos, type FiltrosJogos } from "../utils/filtros";
 import { normalizarTexto } from "../utils/formatadores";
 import { gerarImagemPalpitesDeJogo } from "../utils/gerarImagemPalpites";
+import { gerarImagemPalpitesFiltrados, gerarImagemPalpitesParticipante } from "../utils/gerarImagemRelatorios";
 import { gerarPdfPalpitesDeJogo, gerarPdfPalpitesFiltrados, gerarPdfPalpitesParticipante } from "../utils/gerarPdfPalpites";
 
 const PAGE_SIZE_JOGOS = 4;
@@ -163,8 +164,20 @@ export function Jogos() {
           >
             PDF participante
           </Button>
+          <Button
+            variant="secondary"
+            className="w-full sm:w-auto"
+            icon={<Download className="h-4 w-4" aria-hidden />}
+            disabled={!participanteDebounced}
+            onClick={() => gerarImagemPalpitesParticipante(participanteDebounced, jogosFiltrados, palpitesFiltrados)}
+          >
+            PNG participante
+          </Button>
           <Button className="w-full sm:w-auto" icon={<Download className="h-4 w-4" aria-hidden />} onClick={() => gerarPdfPalpitesFiltrados(jogosFiltrados, palpitesFiltrados)}>
             PDF filtrado
+          </Button>
+          <Button className="w-full sm:w-auto" variant="secondary" icon={<Download className="h-4 w-4" aria-hidden />} onClick={() => gerarImagemPalpitesFiltrados(jogosFiltrados, palpitesFiltrados)}>
+            PNG filtrado
           </Button>
         </div>
       </div>
