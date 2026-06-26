@@ -21,11 +21,23 @@
   ],
   "rewrites": [
     {
+      "source": "/login",
+      "destination": "/index.html"
+    },
+    {
+      "source": "/me",
+      "destination": "/index.html"
+    },
+    {
       "source": "/ranking",
       "destination": "/index.html"
     },
     {
       "source": "/jogos",
+      "destination": "/index.html"
+    },
+    {
+      "source": "/importar-whatsapp",
       "destination": "/index.html"
     },
     {

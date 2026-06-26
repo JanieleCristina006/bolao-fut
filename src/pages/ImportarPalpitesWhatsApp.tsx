@@ -1,10 +1,9 @@
-import { ClipboardPaste, Eraser, KeyRound, RefreshCcw, Send } from "lucide-react";
+import { ClipboardPaste, Eraser, RefreshCcw, Send } from "lucide-react";
 import { useMemo, useState } from "react";
 import { PreviaImportacaoPalpites } from "../components/importacao/PreviaImportacaoPalpites";
 import { Button } from "../components/ui/Button";
 import { Card, CardBody } from "../components/ui/Card";
 import { ErrorState } from "../components/ui/ErrorState";
-import { Input } from "../components/ui/Input";
 import { LoadingSkeleton } from "../components/ui/LoadingSkeleton";
 import { Spinner } from "../components/ui/Spinner";
 import { useToast } from "../components/ui/Toast";
@@ -147,7 +146,7 @@ export function ImportarPalpitesWhatsApp() {
   const [isImporting, setIsImporting] = useState(false);
   const [importacaoConcluida, setImportacaoConcluida] = useState<ImportarPalpitesEmLoteResponse | null>(null);
   const [estrutura, setEstrutura] = useState<EstruturaImportacaoPalpites | null>(null);
-  const [adminToken, setAdminToken] = useState(window.sessionStorage.getItem("bolao-admin-token") ?? "");
+  const [adminToken] = useState(window.sessionStorage.getItem("bolao-admin-token") ?? "");
 
   const palpitesParaEnviar = useMemo<ImportarPalpiteEmLoteItem[]>(() => {
     if (!resultado) return [];
@@ -307,21 +306,6 @@ export function ImportarPalpitesWhatsApp() {
               />
             </label>
             <div className="space-y-3">
-              <label className="space-y-2">
-                <span className="flex items-center gap-2 text-sm font-bold text-slate-700">
-                  <KeyRound className="h-4 w-4 text-brand-600" aria-hidden />
-                  Token administrativo
-                </span>
-                <Input
-                  type="password"
-                  value={adminToken}
-                  onChange={(event) => {
-                    setAdminToken(event.target.value);
-                    window.sessionStorage.setItem("bolao-admin-token", event.target.value);
-                  }}
-                  placeholder="Token administrativo"
-                />
-              </label>
               <div className="rounded-lg border border-slate-200 bg-slate-50 p-3 text-sm text-slate-600">
                 {adminWritesEnabled
                   ? "A confirmação será validada novamente pelo Google Apps Script antes de gravar."

@@ -50,7 +50,7 @@ export function Pagamentos() {
   const [busca, setBusca] = useState(searchParams.get("busca") ?? "");
   const [status, setStatus] = useState(searchParams.get("status") ?? "todos");
   const [dataPagamento, setDataPagamento] = useState(searchParams.get("data") ?? "");
-  const [adminToken, setAdminToken] = useState(window.sessionStorage.getItem("bolao-admin-token") ?? "");
+  const [adminToken] = useState(window.sessionStorage.getItem("bolao-admin-token") ?? "");
   const buscaDebounced = useDebounce(busca);
 
   useEffect(() => {
@@ -141,7 +141,7 @@ export function Pagamentos() {
         ))}
       </section>
 
-      <div className="grid gap-3 rounded-lg border border-slate-200 bg-white p-4 shadow-soft no-print md:grid-cols-5">
+      <div className="grid gap-3 rounded-lg border border-slate-200 bg-white p-4 shadow-soft no-print md:grid-cols-4">
         <Input value={busca} onChange={(event) => setBusca(event.target.value)} placeholder="Buscar participante" />
         <Select value={status} onChange={(event) => setStatus(event.target.value)}>
           <option value="todos">Todos</option>
@@ -150,16 +150,6 @@ export function Pagamentos() {
           <option value="pendente">Pendentes</option>
         </Select>
         <Input type="date" value={dataPagamento} onChange={(event) => setDataPagamento(event.target.value)} />
-        <Input
-          type="password"
-          value={adminToken}
-          onChange={(event) => {
-            setAdminToken(event.target.value);
-            window.sessionStorage.setItem("bolao-admin-token", event.target.value);
-          }}
-          placeholder="Token administrativo"
-          aria-label="Token administrativo"
-        />
         <Button
           variant="ghost"
           className="w-full"

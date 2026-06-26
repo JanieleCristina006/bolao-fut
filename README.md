@@ -37,6 +37,9 @@ VITE_GOOGLE_SCRIPT_API_URL=/api/sheets
 
 # URL real do Apps Script usada pelo proxy local/Netlify/Vercel.
 GOOGLE_SCRIPT_API_URL=https://script.google.com/macros/s/SEU_ID/exec
+
+# Connection string do Neon usada pelo servidor para senha dos participantes.
+DATABASE_URL=postgresql://usuario:senha@host/neondb?sslmode=require
 ```
 
 O aplicativo usa somente a integração com o Google Planilhas. Se a integração ainda não estiver configurada, as telas exibem o erro de conexão; nenhum dado local ou demonstrativo é usado como substituto.
@@ -138,6 +141,32 @@ POST:
 ```
 
 O frontend chama `/api/sheets` no mesmo domínio. Essa rota atua como proxy, chama o Apps Script pelo servidor e evita o bloqueio CORS causado pelo redirecionamento do `script.google.com`.
+
+## Login de participantes com Neon
+
+Os nomes dos participantes continuam vindo da planilha. O Neon guarda somente a senha numerica de 6 digitos escolhida por cada participante.
+
+1. Crie um projeto no Neon.
+2. No painel do Neon, clique em `Connect` e copie a connection string do banco.
+3. Configure essa string como `DATABASE_URL` no `.env`, na Vercel ou na Netlify.
+4. Rode o app. A tabela `participante_auth` sera criada automaticamente no primeiro login.
+
+SQL criado automaticamente pela API:
+
+```sql
+create table if not exists participante_auth (
+  participante_key text primary key,
+  participante_nome text not null,
+  pin text,
+  pin_configurado_em timestamptz,
+  ultimo_login_em timestamptz,
+  tentativas_falhas integer not null default 0,
+  criado_em timestamptz not null default now(),
+  atualizado_em timestamptz not null default now()
+);
+```
+
+Essa senha e simples e fica salva pura no Neon, conforme escolhido para este projeto. Nao use esse modelo para dados sensiveis.
 
 ## Segurança administrativa
 

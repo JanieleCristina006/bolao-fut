@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
-import { ChevronDown, ChevronUp, Download, Filter, KeyRound, Printer, RotateCcw, Search } from "lucide-react";
+import { ChevronDown, ChevronUp, Download, Filter, Printer, RotateCcw } from "lucide-react";
 import { useSearchParams } from "react-router-dom";
+import { useAuth } from "../auth/AuthContext";
 import { JogoCard } from "../components/jogos/JogoCard";
 import { Button } from "../components/ui/Button";
 import { EmptyState } from "../components/ui/EmptyState";
@@ -17,11 +18,23 @@ import { useToast } from "../components/ui/Toast";
 import { filtrarJogos, type FiltrosJogos } from "../utils/filtros";
 import { normalizarTexto } from "../utils/formatadores";
 import { gerarImagemPalpitesDeJogo } from "../utils/gerarImagemPalpites";
-import { gerarImagemPalpitesParticipante, gerarZipImagensPalpitesFiltrados } from "../utils/gerarImagemRelatorios";
-import { gerarPdfPalpitesDeJogo, gerarPdfPalpitesFiltrados, gerarPdfPalpitesParticipante } from "../utils/gerarPdfPalpites";
+import { gerarZipImagensPalpitesFiltrados } from "../utils/gerarImagemRelatorios";
+import { gerarPdfPalpitesDeJogo, gerarPdfPalpitesFiltrados } from "../utils/gerarPdfPalpites";
 
 const PAGE_SIZE_JOGOS = 4;
 type FormatoDownload = "pdf" | "imagem";
+
+function dataLocalIso(data = new Date()): string {
+  const ano = data.getFullYear();
+  const mes = String(data.getMonth() + 1).padStart(2, "0");
+  const dia = String(data.getDate()).padStart(2, "0");
+  return `${ano}-${mes}-${dia}`;
+}
+
+function obterDiaAtual(jogos: Jogo[]): string {
+  const hoje = dataLocalIso();
+  return jogos.find((jogo) => jogo.data.slice(0, 10) === hoje)?.dia ?? "";
+}
 
 function palpiteBateTipo(palpite: Palpite, tipo: FiltrosJogos["tipo"]): boolean {
   if (tipo === "todos") return true;
@@ -31,12 +44,16 @@ function palpiteBateTipo(palpite: Palpite, tipo: FiltrosJogos["tipo"]): boolean 
 
 export function Jogos() {
   const { data, isLoading, error, refetch } = useJogos();
+  const { session } = useAuth();
   const { showToast } = useToast();
   const adminWritesEnabled = isAdminWritesEnabled();
+  const isParticipant = session?.role === "participant";
+  const canEditResults = session?.role === "admin" && adminWritesEnabled;
   const [searchParams, setSearchParams] = useSearchParams();
   const [savingResultId, setSavingResultId] = useState<string | null>(null);
-  const [adminToken, setAdminToken] = useState(window.sessionStorage.getItem("bolao-admin-token") ?? "");
+  const [adminToken] = useState(window.sessionStorage.getItem("bolao-admin-token") ?? "");
   const [mobileFiltersOpen, setMobileFiltersOpen] = useState(false);
+  const [diaAtualAplicado, setDiaAtualAplicado] = useState(Boolean(searchParams.get("dia")));
   const [filtros, setFiltros] = useState<FiltrosJogos>({
     participante: searchParams.get("participante") ?? "",
     dia: searchParams.get("dia") ?? "",
@@ -51,6 +68,10 @@ export function Jogos() {
   const participanteDebounced = useDebounce(filtros.participante);
   const jogoDebounced = useDebounce(filtros.jogo);
   const selecaoDebounced = useDebounce(filtros.selecao);
+  const jogos = data?.jogos ?? [];
+  const palpites = data?.palpites ?? [];
+  const dias = Array.from(new Set(jogos.map((jogo) => jogo.dia)));
+  const diaAtual = obterDiaAtual(jogos);
 
   const filtrosDebounced = useMemo(
     () => ({ ...filtros, participante: participanteDebounced, jogo: jogoDebounced, selecao: selecaoDebounced }),
@@ -70,9 +91,11 @@ export function Jogos() {
     setPage(1);
   }, [participanteDebounced, jogoDebounced, selecaoDebounced, filtros.dia, filtros.rodada, filtros.status, filtros.resultado, filtros.tipo]);
 
-  const jogos = data?.jogos ?? [];
-  const palpites = data?.palpites ?? [];
-  const dias = Array.from(new Set(jogos.map((jogo) => jogo.dia)));
+  useEffect(() => {
+    if (diaAtualAplicado || !diaAtual || searchParams.has("dia")) return;
+    setFiltros((current) => (current.dia ? current : { ...current, dia: diaAtual }));
+    setDiaAtualAplicado(true);
+  }, [diaAtual, diaAtualAplicado, searchParams]);
 
   const palpitesFiltrados = useMemo(() => {
     const termo = normalizarTexto(participanteDebounced);
@@ -122,7 +145,7 @@ export function Jogos() {
   function limparFiltros() {
     setFiltros({
       participante: "",
-      dia: "",
+      dia: diaAtual,
       rodada: "",
       jogo: "",
       selecao: "",
@@ -178,61 +201,36 @@ export function Jogos() {
     <div className="space-y-6 pb-20 lg:pb-0">
       <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
         <div>
-          <h2 className="text-2xl font-black text-slate-950">Jogos e palpites</h2>
-          <p className="text-sm text-slate-500">Pontuação calculada no frontend a partir do resultado oficial.</p>
+          <h2 className="text-2xl font-black text-slate-950 max-lg:text-white">Jogos e palpites</h2>
+          <p className="text-sm text-slate-500 max-lg:text-zinc-100/65">Pontuação calculada no frontend a partir do resultado oficial.</p>
         </div>
         <div className="grid gap-2 no-print sm:flex sm:flex-wrap sm:items-end lg:justify-end">
-          <Button className="w-full sm:w-auto" variant="secondary" icon={<Printer className="h-4 w-4" aria-hidden />} onClick={() => window.print()}>
-            Imprimir palpites
-          </Button>
-          <Button
-            variant="secondary"
-            className="w-full sm:w-auto"
-            icon={<Download className="h-4 w-4" aria-hidden />}
-            disabled={!participanteDebounced}
-            onClick={() => gerarPdfPalpitesParticipante(participanteDebounced, jogosFiltrados, palpitesFiltrados)}
-          >
-            PDF participante
-          </Button>
-          <Button
-            variant="secondary"
-            className="w-full sm:w-auto"
-            icon={<Download className="h-4 w-4" aria-hidden />}
-            disabled={!participanteDebounced}
-            onClick={() => gerarImagemPalpitesParticipante(participanteDebounced, jogosFiltrados, palpitesFiltrados)}
-          >
-            PNG participante
-          </Button>
+          {!isParticipant ? (
+            <Button className="w-full sm:w-auto" variant="secondary" icon={<Printer className="h-4 w-4" aria-hidden />} onClick={() => window.print()}>
+              Imprimir palpites
+            </Button>
+          ) : null}
           <Button className="w-full sm:w-auto" icon={<Download className="h-4 w-4" aria-hidden />} onClick={baixarFiltradosEmPdf}>
             PDF filtrado
           </Button>
-          <Button className="w-full sm:w-auto" variant="secondary" icon={<Download className="h-4 w-4" aria-hidden />} onClick={() => void baixarFiltradosEmPng()}>
-            ZIP com PNGs
-          </Button>
+          {!isParticipant ? (
+            <Button className="w-full sm:w-auto" variant="secondary" icon={<Download className="h-4 w-4" aria-hidden />} onClick={() => void baixarFiltradosEmPng()}>
+              ZIP com PNGs
+            </Button>
+          ) : null}
         </div>
       </div>
 
       <div className="space-y-3 no-print md:hidden">
-        <div className="relative">
-          <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" aria-hidden />
-          <Input
-            className="pl-9"
-            value={filtros.participante}
-            onChange={(event) => setFiltros((current) => ({ ...current, participante: event.target.value }))}
-            placeholder="Buscar participante"
-            aria-label="Buscar participante"
-          />
-        </div>
-
         <button
           type="button"
-          className="flex min-h-11 w-full items-center justify-between rounded-lg border border-slate-300 bg-white px-3 text-sm font-semibold text-slate-700 shadow-sm transition hover:bg-slate-50 focus:outline-none focus:ring-4 focus:ring-slate-200"
+          className="flex min-h-11 w-full items-center justify-between rounded-2xl border border-white/10 bg-white/10 px-3 text-sm font-semibold text-zinc-100 shadow-sm transition hover:bg-white/15 focus:outline-none focus:ring-4 focus:ring-white/15"
           aria-expanded={mobileFiltersOpen}
           aria-controls="filtros-jogos"
           onClick={() => setMobileFiltersOpen((current) => !current)}
         >
           <span className="flex items-center gap-2">
-            <Filter className="h-4 w-4 text-brand-600" aria-hidden />
+            <Filter className="h-4 w-4 text-zinc-200" aria-hidden />
             {mobileFiltersOpen ? "Ocultar filtros" : "Abrir filtros"}
           </span>
           {mobileFiltersOpen ? <ChevronUp className="h-4 w-4" aria-hidden /> : <ChevronDown className="h-4 w-4" aria-hidden />}
@@ -241,24 +239,15 @@ export function Jogos() {
 
       <div
         id="filtros-jogos"
-        className={`${mobileFiltersOpen ? "grid" : "hidden"} grid-cols-2 gap-3 rounded-lg border border-slate-200 bg-white p-4 shadow-soft no-print md:grid md:grid-cols-3 xl:grid-cols-5`}
+        className={`${mobileFiltersOpen ? "grid" : "hidden"} grid-cols-2 gap-3 rounded-2xl border border-slate-200 bg-white p-4 shadow-soft no-print md:grid md:grid-cols-3 xl:grid-cols-5 max-lg:border-white/10 max-lg:bg-[#1b1b1b]`}
       >
-        <label className="hidden min-w-0 space-y-1 md:block">
-          <span className="text-xs font-semibold text-slate-500">Participante</span>
-          <Input
-            value={filtros.participante}
-            onChange={(event) => setFiltros((current) => ({ ...current, participante: event.target.value }))}
-            placeholder="Buscar participante"
-          />
-        </label>
-
         <label className="col-span-2 min-w-0 space-y-1 md:col-span-1">
-          <span className="text-xs font-semibold text-slate-500">Jogo</span>
+          <span className="text-xs font-semibold text-slate-500 max-lg:text-zinc-100/65">Jogo</span>
           <Input value={filtros.jogo} onChange={(event) => setFiltros((current) => ({ ...current, jogo: event.target.value }))} placeholder="Filtrar por jogo" />
         </label>
 
         <label className="min-w-0 space-y-1">
-          <span className="text-xs font-semibold text-slate-500">Dia</span>
+          <span className="text-xs font-semibold text-slate-500 max-lg:text-zinc-100/65">Dia</span>
           <Select className="min-w-0" value={filtros.dia} onChange={(event) => setFiltros((current) => ({ ...current, dia: event.target.value }))}>
             <option value="">Todos os dias</option>
             {dias.map((dia) => (
@@ -270,11 +259,11 @@ export function Jogos() {
         </label>
 
         <label className="min-w-0 space-y-1">
-          <span className="text-xs font-semibold text-slate-500">Seleção</span>
+          <span className="text-xs font-semibold text-slate-500 max-lg:text-zinc-100/65">Seleção</span>
           <Input value={filtros.selecao} onChange={(event) => setFiltros((current) => ({ ...current, selecao: event.target.value }))} placeholder="Filtrar seleção" />
         </label>
 
-        <Button variant="ghost" className="w-full self-end" icon={<RotateCcw className="h-4 w-4" aria-hidden />} onClick={limparFiltros}>
+        <Button variant="ghost" className="w-full self-end max-lg:text-zinc-100" icon={<RotateCcw className="h-4 w-4" aria-hidden />} onClick={limparFiltros}>
           Limpar filtros
         </Button>
 
@@ -282,25 +271,6 @@ export function Jogos() {
           Aplicar filtros
         </Button>
 
-        {adminWritesEnabled ? (
-          <label className="relative col-span-2 space-y-1 md:col-span-2 xl:col-span-1">
-            <span className="text-xs font-semibold text-slate-500">Acesso administrativo</span>
-            <span className="relative block">
-              <KeyRound className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" aria-hidden />
-              <Input
-                className="pl-9"
-                type="password"
-                value={adminToken}
-                onChange={(event) => {
-                  setAdminToken(event.target.value);
-                  window.sessionStorage.setItem("bolao-admin-token", event.target.value);
-                }}
-                placeholder="Token para editar resultados"
-                aria-label="Token administrativo"
-              />
-            </span>
-          </label>
-        ) : null}
       </div>
 
       {paginaAtual.length === 0 ? (
@@ -312,7 +282,7 @@ export function Jogos() {
               key={jogo.id}
               jogo={jogo}
               palpites={palpitesFiltrados.filter((palpite) => palpite.jogoId === jogo.id)}
-              canEditResult={adminWritesEnabled}
+              canEditResult={canEditResults}
               isSavingResult={savingResultId === jogo.id}
               onSaveResult={salvarResultado}
               onDownload={baixarJogo}
@@ -325,3 +295,4 @@ export function Jogos() {
     </div>
   );
 }
+

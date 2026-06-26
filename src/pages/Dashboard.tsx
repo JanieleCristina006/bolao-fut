@@ -1,6 +1,6 @@
 import { useEffect, useState, type FormEvent } from "react";
 import { Link } from "react-router-dom";
-import { CalendarClock, CheckCircle2, CreditCard, Download, KeyRound, RefreshCw, Smartphone, Target, Trophy, UserPlus, Users, X } from "lucide-react";
+import { CalendarClock, CheckCircle2, CreditCard, Download, RefreshCw, Smartphone, Target, Trophy, UserPlus, Users, X } from "lucide-react";
 import { Podium } from "../components/dashboard/Podium";
 import { StatCard } from "../components/dashboard/StatCard";
 import { Badge } from "../components/ui/Badge";
@@ -25,7 +25,7 @@ export function Dashboard() {
   const [isAppInstalled, setIsAppInstalled] = useState(isPwaInstalled);
   const [showAddParticipant, setShowAddParticipant] = useState(false);
   const [participantName, setParticipantName] = useState("");
-  const [adminToken, setAdminToken] = useState(window.sessionStorage.getItem("bolao-admin-token") ?? "");
+  const [adminToken] = useState(window.sessionStorage.getItem("bolao-admin-token") ?? "");
   const [isAddingParticipant, setIsAddingParticipant] = useState(false);
   const adminWritesEnabled = isAdminWritesEnabled();
 
@@ -138,7 +138,7 @@ export function Dashboard() {
             </Button>
           </CardHeader>
           <CardBody>
-            <form className="grid gap-3 md:grid-cols-[1fr_18rem_auto]" onSubmit={(event) => void handleAddParticipant(event)}>
+            <form className="grid gap-3 md:grid-cols-[1fr_auto]" onSubmit={(event) => void handleAddParticipant(event)}>
               <Input
                 value={participantName}
                 onChange={(event) => setParticipantName(event.target.value)}
@@ -146,21 +146,6 @@ export function Dashboard() {
                 aria-label="Nome do participante"
                 disabled={isAddingParticipant}
               />
-              <div className="relative">
-                <KeyRound className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" aria-hidden />
-                <Input
-                  className="pl-9"
-                  type="password"
-                  value={adminToken}
-                  onChange={(event) => {
-                    setAdminToken(event.target.value);
-                    window.sessionStorage.setItem("bolao-admin-token", event.target.value);
-                  }}
-                  placeholder="Token administrativo"
-                  aria-label="Token administrativo"
-                  disabled={isAddingParticipant}
-                />
-              </div>
               <Button
                 type="submit"
                 icon={isAddingParticipant ? <Spinner className="h-4 w-4" label="Adicionando" /> : <UserPlus className="h-4 w-4" aria-hidden />}

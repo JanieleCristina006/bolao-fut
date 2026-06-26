@@ -1,6 +1,8 @@
 import { defineConfig, loadEnv } from "vite";
 import react from "@vitejs/plugin-react";
 const SHEETS_PROXY_PATH = "/api/sheets";
+const AUTH_PROXY_PATH = "/api/auth";
+const AUTH_CORE_MODULE_URL = encodeURI(`file:///${process.cwd().replace(/\\/g, "/")}/api/auth-core.js`);
 function setProxyHeaders(res) {
     res.setHeader("Cache-Control", "no-store");
     res.setHeader("Content-Type", "application/json; charset=utf-8");
@@ -63,6 +65,34 @@ async function proxySheetsRequest(req, res, scriptUrl) {
         });
     }
 }
+async function proxyAuthRequest(req, res, databaseUrl) {
+    if (req.method === "OPTIONS") {
+        res.statusCode = 204;
+        setProxyHeaders(res);
+        res.end("");
+        return;
+    }
+    if (req.method !== "POST") {
+        sendProxyJson(res, 405, { ok: false, message: "Metodo nao permitido." });
+        return;
+    }
+    try {
+        if (databaseUrl && !process.env.DATABASE_URL) {
+            process.env.DATABASE_URL = databaseUrl;
+        }
+        const authModule = (await import(AUTH_CORE_MODULE_URL));
+        const rawBody = await readRequestBody(req);
+        const payload = rawBody ? JSON.parse(rawBody) : {};
+        const result = await authModule.handleAuthPayload(payload);
+        sendProxyJson(res, result.statusCode, result.payload);
+    }
+    catch (error) {
+        sendProxyJson(res, 500, {
+            ok: false,
+            message: error instanceof Error ? error.message : "Nao foi possivel autenticar."
+        });
+    }
+}
 export default defineConfig(({ mode }) => {
     const env = loadEnv(mode, ".", "");
     return {
@@ -74,10 +104,16 @@ export default defineConfig(({ mode }) => {
                     server.middlewares.use(SHEETS_PROXY_PATH, (req, res) => {
                         void proxySheetsRequest(req, res, env.GOOGLE_SCRIPT_API_URL);
                     });
+                    server.middlewares.use(AUTH_PROXY_PATH, (req, res) => {
+                        void proxyAuthRequest(req, res, env.DATABASE_URL || env.NEON_DATABASE_URL);
+                    });
                 },
                 configurePreviewServer(server) {
                     server.middlewares.use(SHEETS_PROXY_PATH, (req, res) => {
                         void proxySheetsRequest(req, res, env.GOOGLE_SCRIPT_API_URL);
+                    });
+                    server.middlewares.use(AUTH_PROXY_PATH, (req, res) => {
+                        void proxyAuthRequest(req, res, env.DATABASE_URL || env.NEON_DATABASE_URL);
                     });
                 }
             }

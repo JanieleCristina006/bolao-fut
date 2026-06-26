@@ -29,6 +29,14 @@ body {
   -webkit-tap-highlight-color: transparent;
 }
 
+@media (max-width: 1023px) {
+  :root,
+  html,
+  body {
+    background: #121212;
+  }
+}
+
 button,
 input,
 select {
