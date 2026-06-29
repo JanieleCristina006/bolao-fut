@@ -91,8 +91,8 @@ export function gerarImagemParticipante(participante: ParticipanteDetalhe, jogos
       return [
         `${jogo.mandante} x ${jogo.visitante}`,
         `${formatarData(jogo.data)} ${jogo.horario}`,
-        jogo.resultado ?? "pendente",
-        palpite?.palpite ?? "-",
+        jogo.fase === "mata-mata" ? `${jogo.resultado ?? "pendente"} / ${jogo.classificado ?? "pendente"}` : (jogo.resultado ?? "pendente"),
+        jogo.fase === "mata-mata" ? `${palpite?.palpite ?? "-"} / ${palpite?.classificado ?? "-"}` : (palpite?.palpite ?? "-"),
         String(palpite?.pontos ?? 0),
         palpite ? PONTUACAO_LABELS[palpite.tipo] : "Sem palpite"
       ];
@@ -132,8 +132,8 @@ export function gerarImagemPalpitesParticipante(nome: string, jogos: Jogo[], pal
       return [
         `${jogo.mandante} x ${jogo.visitante}`,
         `${formatarData(jogo.data)} ${jogo.horario}`,
-        jogo.resultado ?? "pendente",
-        palpite?.palpite ?? "-",
+        jogo.fase === "mata-mata" ? `${jogo.resultado ?? "pendente"} / ${jogo.classificado ?? "pendente"}` : (jogo.resultado ?? "pendente"),
+        jogo.fase === "mata-mata" ? `${palpite?.palpite ?? "-"} / ${palpite?.classificado ?? "-"}` : (palpite?.palpite ?? "-"),
         String(palpite?.pontos ?? 0),
         palpite ? PONTUACAO_LABELS[palpite.tipo] : "Sem palpite"
       ];

@@ -37,6 +37,7 @@ function jogo(id: string, data: string, mandante: string, visitante: string, abr
 const participantes = [
   participante("Karen Milene"),
   participante("Karolyne Azola"),
+  participante("Vitor de Souza"),
   participante("Victor Guimarães"),
   participante("Brenno Vergara"),
   participante("Maria Clara Alonso"),
@@ -59,7 +60,10 @@ const jogos = [
   jogo("jogo-arg-agl", "2026-06-16", "ARG", "AGL", "ARG x AGL"),
   jogo("jogo-aus-jor", "2026-06-16", "\u00C1US", "JOR", "\u00C1US x JOR"),
   jogo("jogo-australia-jor", "2026-06-16", "Australia", "JOR", "AUS x JOR"),
-  jogo("jogo-mex-afs", "2026-06-17", "México", "África do Sul", "MEX x AFS")
+  jogo("jogo-mex-afs", "2026-06-17", "México", "África do Sul", "MEX x AFS"),
+  { ...jogo("mata-bra-jap", "2026-06-29", "Brasil", "Japão", "BRA x JAP"), fase: "mata-mata" as const },
+  { ...jogo("mata-ale-par", "2026-06-29", "Alemanha", "Paraguai", "ALE x PAR"), fase: "mata-mata" as const },
+  { ...jogo("mata-hol-mar", "2026-06-29", "Holanda", "Marrocos", "HOL x MAR"), fase: "mata-mata" as const }
 ];
 
 const palpiteExistente: Palpite = {
@@ -98,6 +102,25 @@ Arábia Saudita 0x1 Uruguai
 Irã 0x2 Nova Zelândia`;
 
 const tests: Array<[string, () => void]> = [
+  [
+    "palpites de mata-mata com classificado entre parenteses",
+    () => {
+      const resultado = processar(`Meu palpite (Vitor de Souza)
+
+🇧🇷 Brasil 3 x 1 Japão 🇯🇵 (Brasil)
+
+🇩🇪 Alemanha 3 x 0 Paraguai 🇵🇾 (Alemanha)
+
+🇳🇱 Holanda 0 x 1 Marrocos 🇲🇦 (Marrocos)`);
+
+      const importaveis = resultado.itens.filter((item) => item.importavel);
+      assert(importaveis.length === 3, "Deveria importar os três palpites de mata-mata.");
+      assert(importaveis[0].jogoId === "mata-bra-jap", "Deveria encontrar Brasil x Japão mesmo com bandeiras.");
+      assert(importaveis[0].placar === "3x1", "Deveria preservar o placar.");
+      assert(importaveis[0].classificado === "Brasil", "Deveria extrair o classificado entre parênteses.");
+      assert(importaveis[2].classificado === "Marrocos", "Deveria extrair o classificado do último jogo.");
+    }
+  ],
   [
     "mensagem da Karen sem cabeçalho de data",
     () => {

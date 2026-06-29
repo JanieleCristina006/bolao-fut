@@ -23,6 +23,7 @@ interface PalpiteLinha {
   timeFora: string;
   golsCasa: number;
   golsFora: number;
+  classificado?: string | null;
 }
 
 interface ResultadoJogo {
@@ -34,7 +35,7 @@ interface ResultadoJogo {
 const SCORE_PATTERN = "(\\d{1,2})\\s*(?:[xX]|-|a)\\s*(\\d{1,2})";
 const SCORE_REGEX = new RegExp(SCORE_PATTERN, "i");
 const PALPITE_REGEX = new RegExp(`^(.+?)\\s+${SCORE_PATTERN}\\s+(.+)$`, "i");
-const PARTICIPANTE_REGEX = /meus\s+palpites\s*\(([^)]+)\)/i;
+const PARTICIPANTE_REGEX = /meus?\s+palpites?\s*\(([^)]+)\)/i;
 const TIME_ALIASES = [
   ["africa do sul", "afs"],
   ["argelia", "agl", "alg"],
@@ -125,17 +126,33 @@ function extrairParticipante(linha: string): string | null {
   return match ? limparEspacos(match[1]) : null;
 }
 
+function limparNomeTime(valor: string): string {
+  return limparEspacos(String(valor).replace(/[^\p{L}\p{N}\s.'-]/gu, " "));
+}
+
+function extrairClassificado(linha: string): { linhaPalpite: string; classificado: string | null } {
+  const match = linha.match(/\(([^()]+)\)\s*$/);
+  if (!match) return { linhaPalpite: linha, classificado: null };
+
+  const classificado = limparNomeTime(match[1]);
+  return {
+    linhaPalpite: limparEspacos(linha.slice(0, match.index)),
+    classificado: classificado || null
+  };
+}
+
 function interpretarLinhaPalpite(linha: string): PalpiteLinha | null {
-  const match = linha.match(PALPITE_REGEX);
+  const { linhaPalpite, classificado } = extrairClassificado(linha);
+  const match = linhaPalpite.match(PALPITE_REGEX);
   if (!match) return null;
 
-  const timeCasa = limparEspacos(match[1]);
-  const timeFora = limparEspacos(match[4]);
+  const timeCasa = limparNomeTime(match[1]);
+  const timeFora = limparNomeTime(match[4]);
   const golsCasa = Number(match[2]);
   const golsFora = Number(match[3]);
 
   if (!timeCasa || !timeFora || Number.isNaN(golsCasa) || Number.isNaN(golsFora)) return null;
-  return { timeCasa, timeFora, golsCasa, golsFora };
+  return { timeCasa, timeFora, golsCasa, golsFora, classificado };
 }
 
 function parecePalpiteComFormatoInvalido(linha: string): boolean {
@@ -274,7 +291,9 @@ function criarItemValidoOuInvalidado(
   }
 
   const existente = palpiteExistente(options.palpitesExistentes ?? [], participanteOficial, jogo?.id);
-  if (existente) avisos.push(`Palpite atual: ${existente.palpite}.`);
+  if (existente?.palpite) avisos.push(`Palpite atual: ${existente.palpite}.`);
+  if (existente?.classificado) avisos.push(`Classificado atual: ${existente.classificado}.`);
+  if (palpite.classificado) avisos.push(`Classificado informado: ${palpite.classificado}.`);
 
   const valido = erros.length === 0;
   const status: StatusImportacaoPalpite = valido ? (existente ? "palpite-existente" : "valido") : statusComErros(erros, "formato-invalido");
@@ -292,6 +311,7 @@ function criarItemValidoOuInvalidado(
     golsCasa: palpite.golsCasa,
     golsFora: palpite.golsFora,
     placar: `${palpite.golsCasa}x${palpite.golsFora}`,
+    classificado: palpite.classificado ?? null,
     jogoId: jogo?.id,
     jogoTexto: jogo ? `${jogo.mandante} x ${jogo.visitante}` : `${palpite.timeCasa} x ${palpite.timeFora}`,
     mandanteOficial: jogo?.mandante,
@@ -303,6 +323,7 @@ function criarItemValidoOuInvalidado(
     usarNaImportacao: valido,
     duplicado: false,
     palpiteAtual: existente?.palpite ?? null,
+    classificadoAtual: existente?.classificado ?? null,
     decisao: existente ? "manter" : "substituir",
     avisos,
     erros
@@ -323,6 +344,7 @@ function criarItemFormatoInvalido(linhaOriginal: string, linha: number, bloco: B
     golsCasa: null,
     golsFora: null,
     placar: "",
+    classificado: null,
     jogoTexto: linhaOriginal,
     status: "formato-invalido",
     valido: false,
@@ -395,6 +417,7 @@ function adicionarNaoEnviados(blocos: BlocoParticipante[], jogos: Jogo[], palpit
         golsCasa: null,
         golsFora: null,
         placar: "—",
+        classificado: null,
         jogoId: jogo.id,
         jogoTexto: `${jogo.mandante} x ${jogo.visitante}`,
         mandanteOficial: jogo.mandante,
@@ -406,6 +429,7 @@ function adicionarNaoEnviados(blocos: BlocoParticipante[], jogos: Jogo[], palpit
         usarNaImportacao: false,
         duplicado: false,
         palpiteAtual: existente?.palpite ?? null,
+        classificadoAtual: existente?.classificado ?? null,
         decisao: "ignorar",
         avisos: [
           existente
@@ -426,7 +450,7 @@ function montarResumo(itens: ImportacaoPalpiteItem[]): ResultadoImportacaoPalpit
     invalidos: itens.filter((item) => !item.valido && item.status !== "nao-enviou").length,
     duplicados: itens.filter((item) => item.duplicado).length,
     naoEnviados: itens.filter((item) => item.status === "nao-enviou").length,
-    comPalpiteExistente: itens.filter((item) => Boolean(item.palpiteAtual)).length
+    comPalpiteExistente: itens.filter((item) => Boolean(item.palpiteAtual || item.classificadoAtual)).length
   };
 }
 

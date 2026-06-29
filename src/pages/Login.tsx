@@ -138,12 +138,12 @@ export function Login() {
   }
 
   return (
-    <main className="min-h-screen bg-[#121212] text-white">
+    <main className="min-h-screen bg-[#0f766e] text-white">
       <section
         className="flex min-h-screen items-center justify-center bg-cover bg-center px-4 py-8 sm:px-6"
         style={{
           backgroundImage:
-            "linear-gradient(180deg, rgba(18, 18, 18, 0.94), rgba(18, 18, 18, 0.88), rgba(18, 18, 18, 0.98)), url('/banner.jpg')"
+            "radial-gradient(circle at 18% 14%, rgba(250, 204, 21, 0.22), transparent 28%), radial-gradient(circle at 84% 18%, rgba(56, 189, 248, 0.2), transparent 26%), linear-gradient(135deg, #0f766e 0%, #17635a 48%, #1f5f7a 100%)"
         }}
       >
         <div className="w-full max-w-md">
@@ -158,11 +158,11 @@ export function Login() {
               <button
                 type="button"
                 className={cn(
-                  "flex min-h-24 w-full items-center gap-4 rounded-3xl border border-white/10 bg-white/10 p-4 text-left shadow-[0_16px_34px_rgba(0,0,0,0.28)] transition hover:bg-white/15 focus:outline-none focus:ring-4 focus:ring-white/15"
+                  "flex min-h-24 w-full items-center gap-4 rounded-3xl border border-white/20 bg-white/20 p-4 text-left shadow-[0_16px_34px_rgba(15,118,110,0.28)] transition hover:bg-white/25 focus:outline-none focus:ring-4 focus:ring-white/20"
                 )}
                 onClick={() => setMode("admin")}
               >
-                <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-white text-[#121212]">
+                <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-white text-[#0f766e]">
                   <ShieldCheck className="h-6 w-6" aria-hidden />
                 </span>
                 <span className="min-w-0">
@@ -174,14 +174,14 @@ export function Login() {
               <button
                 type="button"
                 className={cn(
-                  "flex min-h-24 w-full items-center gap-4 rounded-3xl border border-white/10 bg-[#1b1b1b] p-4 text-left text-white shadow-[0_16px_34px_rgba(0,0,0,0.32)] transition hover:bg-[#242424] focus:outline-none focus:ring-4 focus:ring-white/15"
+                  "flex min-h-24 w-full items-center gap-4 rounded-3xl border border-white/20 bg-white/10 p-4 text-left text-white shadow-[0_16px_34px_rgba(15,118,110,0.3)] transition hover:bg-white/20 focus:outline-none focus:ring-4 focus:ring-white/20"
                 )}
                 onClick={() => {
                   resetParticipantFlow();
                   setMode("participant");
                 }}
               >
-                <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-zinc-100 text-[#121212]">
+                <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-white text-[#0f766e]">
                   <UserRound className="h-6 w-6" aria-hidden />
                 </span>
                 <span className="min-w-0">
@@ -191,7 +191,7 @@ export function Login() {
               </button>
             </div>
           ) : (
-            <Card className="!overflow-hidden !border-white/10 !bg-[#1b1b1b] !shadow-[0_18px_44px_rgba(0,0,0,0.36)]">
+            <Card className="!overflow-hidden !border-white/20 !bg-[#17635a] !shadow-[0_18px_44px_rgba(15,118,110,0.34)]">
               <CardBody className="space-y-5 p-5 sm:p-6">
                 <div className="flex items-center justify-between gap-3">
                   <Button
@@ -218,7 +218,7 @@ export function Login() {
                 </div>
 
                 <div className="flex items-start gap-3">
-                  <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-zinc-100 text-[#121212]">
+                  <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-white text-[#0f766e]">
                     {mode === "participant" ? <UserRound className="h-6 w-6" aria-hidden /> : <KeyRound className="h-6 w-6" aria-hidden />}
                   </span>
                   <div>
@@ -244,7 +244,7 @@ export function Login() {
                             <label className="space-y-2">
                               <span className="text-sm font-bold text-zinc-100/75">Nome do participante</span>
                               <Input
-                                className="!border-white/10 !bg-[#121212] !text-white placeholder:!text-zinc-500 focus:!border-zinc-400 focus:!ring-white/10"
+                                className="!border-white/20 !bg-white/10 !text-white placeholder:!text-white/50 focus:!border-white/60 focus:!ring-white/20"
                                 value={nome}
                                 list="participantes-login"
                                 onChange={(event) => setNome(event.target.value)}
@@ -259,7 +259,7 @@ export function Login() {
                               </datalist>
                             </label>
                             <Button
-                            className="w-full !bg-zinc-100 !text-[#121212] hover:!bg-white disabled:!bg-zinc-700 disabled:!text-zinc-300 disabled:!opacity-100"
+                              className="w-full !bg-white !text-[#0f766e] hover:!bg-emerald-50 disabled:!bg-white/20 disabled:!text-white/60 disabled:!opacity-100"
                               type="submit"
                               icon={<LogIn className="h-4 w-4" aria-hidden />}
                               disabled={!nome.trim() || isCheckingParticipant}
@@ -277,7 +277,7 @@ export function Login() {
                           </span>
                           <span className="relative block">
                             <Input
-                              className="!border-white/10 !bg-[#121212] !pr-12 !text-white placeholder:!text-zinc-500 focus:!border-zinc-400 focus:!ring-white/10"
+                              className="!border-white/20 !bg-white/10 !pr-12 !text-white placeholder:!text-white/50 focus:!border-white/60 focus:!ring-white/20"
                               type={showPin ? "text" : "password"}
                               inputMode="numeric"
                               maxLength={6}
@@ -296,7 +296,7 @@ export function Login() {
                             <span className="text-sm font-bold text-zinc-100/75">Confirmar senha</span>
                             <span className="relative block">
                               <Input
-                                className="!border-white/10 !bg-[#121212] !pr-12 !text-white placeholder:!text-zinc-500 focus:!border-zinc-400 focus:!ring-white/10"
+                                className="!border-white/20 !bg-white/10 !pr-12 !text-white placeholder:!text-white/50 focus:!border-white/60 focus:!ring-white/20"
                                 type={showPinConfirm ? "text" : "password"}
                                 inputMode="numeric"
                                 maxLength={6}
@@ -317,7 +317,7 @@ export function Login() {
 
                         <div className="grid gap-2">
                           <Button
-                            className="w-full !bg-zinc-100 !text-[#121212] hover:!bg-white disabled:!bg-zinc-700 disabled:!text-zinc-300 disabled:!opacity-100"
+                            className="w-full !bg-white !text-[#0f766e] hover:!bg-emerald-50 disabled:!bg-white/20 disabled:!text-white/60 disabled:!opacity-100"
                             type="submit"
                             icon={<LogIn className="h-4 w-4" aria-hidden />}
                             disabled={pin.length !== 6 || (participantStep === "setupPin" && pinConfirm.length !== 6) || isSubmittingPin}
@@ -338,7 +338,7 @@ export function Login() {
                       <span className="relative block">
                         <KeyRound className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" aria-hidden />
                         <Input
-                          className="!border-white/10 !bg-[#121212] !pl-9 !pr-12 !text-white placeholder:!text-zinc-500 focus:!border-zinc-400 focus:!ring-white/10"
+                          className="!border-white/20 !bg-white/10 !pl-9 !pr-12 !text-white placeholder:!text-white/50 focus:!border-white/60 focus:!ring-white/20"
                           type={showAdminToken ? "text" : "password"}
                           value={adminToken}
                           onChange={(event) => setAdminToken(event.target.value)}
@@ -352,7 +352,7 @@ export function Login() {
                         />
                       </span>
                     </label>
-                    <Button className="w-full !bg-zinc-100 !text-[#121212] hover:!bg-white disabled:!bg-zinc-700 disabled:!text-zinc-300 disabled:!opacity-100" type="submit" icon={<LogIn className="h-4 w-4" aria-hidden />} disabled={!adminToken.trim()}>
+                    <Button className="w-full !bg-white !text-[#0f766e] hover:!bg-emerald-50 disabled:!bg-white/20 disabled:!text-white/60 disabled:!opacity-100" type="submit" icon={<LogIn className="h-4 w-4" aria-hidden />} disabled={!adminToken.trim()}>
                       Entrar no painel admin
                     </Button>
                   </form>
@@ -365,4 +365,3 @@ export function Login() {
     </main>
   );
 }
-

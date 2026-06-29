@@ -1,5 +1,6 @@
 const SHEET_NAMES = {
   palpites: ["BOLÃO - PALPITES"],
+  mataMata: ["MATA-MATA", "MATA MATA", "MATAMATA"],
   tabela: ["BOLÃO - TABELA"],
   pagamento: ["BOLÃO - PAGAMENTO"],
   ranking: ["RANKING"]
@@ -7,10 +8,11 @@ const SHEET_NAMES = {
 
 const VALOR_PIX = 10;
 const MAX_SCAN_ROWS = 120;
-const SCORING_ENGINE_VERSION = "2026-06-19-v2";
+const SCORING_ENGINE_VERSION = "2026-06-29-mata-mata-v1";
 const SCORE_COLORS = {
   exato: "#5B9BD5",
   pontuado: "#70AD47",
+  classificado: "#FFD966",
   neutro: "#FFFFFF",
   textoClaro: "#FFFFFF",
   textoEscuro: "#000000"
@@ -154,7 +156,11 @@ function handleScoringEdit_(e) {
   try {
     if (!e || !e.range) return;
     var sheet = e.range.getSheet();
-    if (normalizarTexto_(sheet.getName()) !== normalizarTexto_(SHEET_NAMES.palpites[0])) return;
+    var sheetName = normalizarTexto_(sheet.getName());
+    var watchedSheets = [SHEET_NAMES.palpites[0], SHEET_NAMES.mataMata[0]].map(function (name) {
+      return normalizarTexto_(name);
+    });
+    if (watchedSheets.indexOf(sheetName) < 0) return;
 
     var lock = LockService.getScriptLock();
     if (!lock.tryLock(1000)) return;
@@ -196,25 +202,29 @@ function handleGet_(action, params) {
 function readEstruturaImportacao_() {
   var ss = getSpreadsheet_();
   ensureScoringSetup_(ss);
-  var parsed = readPalpitesSheet_(ss);
+  var parsed = readAllPalpites_(ss);
   var jogosTabela = readJogosTabela_(ss);
   var jogos = mergeJogos_(parsed.jogos, jogosTabela);
   var pagamentos = readPagamentos_(ss);
   var rankingPlanilha = readRanking_(ss);
-  var ranking = rankingPlanilha.length ? completeRanking_(rankingPlanilha, parsed.palpites, jogos) : calcularRanking_(parsed.palpites, jogos);
+  var rankingCalculado = calcularRanking_(parsed.palpites, jogos);
+  var ranking = rankingPlanilha.length && rankingPlanilha.some(function (item) { return Number(item.pontos || 0) > 0; })
+    ? completeRanking_(rankingPlanilha, parsed.palpites, jogos)
+    : rankingCalculado;
   var participantes = buildParticipantes_(ranking, pagamentos);
   var alvosByCell = {};
 
   Object.keys(parsed.index.palpites).forEach(function (key) {
     var target = parsed.index.palpites[key];
-    var celula = columnName_(target.col) + target.row;
+    var celula = (target.sheetName ? target.sheetName + "!" : "") + columnName_(target.col) + target.row;
     if (alvosByCell[celula]) return;
     alvosByCell[celula] = {
       participante: target.participante,
       jogoId: target.id,
       cabecalho: target.cabecalho,
       celula: celula,
-      palpiteAtual: target.palpiteAtual || ""
+      palpiteAtual: target.palpiteAtual || "",
+      classificadoAtual: target.classificadoAtual || ""
     };
   });
 
@@ -242,12 +252,15 @@ function readSnapshot_() {
     repararRankingSheet_(rankingSheet);
     SpreadsheetApp.flush();
   }
-  var parsedPalpites = readPalpitesSheet_(ss);
+  var parsedPalpites = readAllPalpites_(ss);
   var jogosTabela = readJogosTabela_(ss);
   var jogos = mergeJogos_(parsedPalpites.jogos, jogosTabela);
   var pagamentos = readPagamentos_(ss);
   var rankingPlanilha = readRanking_(ss);
-  var ranking = rankingPlanilha.length ? completeRanking_(rankingPlanilha, parsedPalpites.palpites, jogos) : calcularRanking_(parsedPalpites.palpites, jogos);
+  var rankingCalculado = calcularRanking_(parsedPalpites.palpites, jogos);
+  var ranking = rankingPlanilha.length && rankingPlanilha.some(function (item) { return Number(item.pontos || 0) > 0; })
+    ? completeRanking_(rankingPlanilha, parsedPalpites.palpites, jogos)
+    : rankingCalculado;
   var participantes = buildParticipantes_(ranking, pagamentos);
 
   return {
@@ -453,6 +466,10 @@ function readPalpitesSheet_(ss) {
           visitante: gameInfo.visitante,
           abreviacao: gameInfo.abreviacao,
           resultado: resultado,
+          classificado: null,
+          fase: "grupos",
+          tipoPontuacao: "grupos",
+          pontosMaximos: 5,
           status: resultado ? "finalizado" : "agendado"
         };
         idAliases.forEach(function (alias) {
@@ -460,6 +477,7 @@ function readPalpitesSheet_(ss) {
             id: id,
             alias: alias,
             cabecalho: gameText,
+            sheetName: sheet.getName(),
             headerRow: row + 1,
             headerCol: col + 1,
             resultadoRow: resultadoInfo ? resultadoInfo.row + 1 : null,
@@ -479,6 +497,7 @@ function readPalpitesSheet_(ss) {
             alias: alias,
             participante: participante,
             cabecalho: gameText,
+            sheetName: sheet.getName(),
             palpiteAtual: formatScore_(values[participantRow][col]) || "",
             row: participantRow + 1,
             col: col + 1
@@ -509,17 +528,255 @@ function readPalpitesSheet_(ss) {
   };
 }
 
+function emptyParsedPalpites_() {
+  return { jogos: [], palpites: [], index: { jogos: {}, palpites: {} } };
+}
+
+function mergeParsedPalpites_(items) {
+  var result = emptyParsedPalpites_();
+  items.forEach(function (item) {
+    if (!item) return;
+    result.jogos = result.jogos.concat(item.jogos || []);
+    result.palpites = result.palpites.concat(item.palpites || []);
+    Object.keys((item.index && item.index.jogos) || {}).forEach(function (key) {
+      result.index.jogos[key] = item.index.jogos[key];
+    });
+    Object.keys((item.index && item.index.palpites) || {}).forEach(function (key) {
+      result.index.palpites[key] = item.index.palpites[key];
+    });
+  });
+  return result;
+}
+
+function readAllPalpites_(ss) {
+  return mergeParsedPalpites_([readPalpitesSheet_(ss), readMataMataSheet_(ss)]);
+}
+
+function findMataMataHeader_(values) {
+  for (var row = 0; row < Math.min(values.length, MAX_SCAN_ROWS); row += 1) {
+    var headers = values[row].map(function (cell) { return normalizarTexto_(cell); });
+    if (
+      headers.indexOf("participante") >= 0 &&
+      headers.some(function (header) { return header.indexOf("saldo grupos") >= 0; }) &&
+      headers.some(function (header) { return header.indexOf("palpite 90m") >= 0; }) &&
+      headers.some(function (header) { return header.indexOf("classificado") >= 0; })
+    ) {
+      return row;
+    }
+  }
+  return -1;
+}
+
+function findMataMataGameColumns_(values, headerRow) {
+  var header = values[headerRow] || [];
+  var titleRow = values[Math.max(0, headerRow - 2)] || [];
+  var typeRow = values[Math.max(0, headerRow - 1)] || [];
+  var games = [];
+
+  for (var col = 0; col < header.length; col += 1) {
+    var current = normalizarTexto_(header[col]);
+    var next = normalizarTexto_(header[col + 1]);
+    if (current.indexOf("palpite") < 0 || next.indexOf("classificado") < 0) continue;
+
+    var titulo = cleanString_(titleRow[col]);
+    if (!titulo) continue;
+
+    games.push({
+      palpiteCol: col,
+      classificadoCol: col + 1,
+      pontosCol: col + 2,
+      titulo: titulo,
+      tipo: normalizarTexto_(typeRow[col]).indexOf("especial") >= 0 ? "especial" : "geral"
+    });
+  }
+
+  return games;
+}
+
+function findMataMataMarkerRow_(values, participantCol, marker, startRow) {
+  var wanted = normalizarTexto_(marker);
+  for (var row = startRow; row < values.length; row += 1) {
+    if (normalizarTexto_(values[row][participantCol]).indexOf(wanted) >= 0) return row;
+  }
+  return -1;
+}
+
+function teamCode_(name) {
+  var normalized = normalizarTexto_(name).replace(/\s+/g, " ");
+  var code;
+  Object.keys(TEAM_NAMES).some(function (sigla) {
+    if (normalizarTexto_(sigla) === normalized || normalizarTexto_(TEAM_NAMES[sigla]).replace(/\s+/g, " ") === normalized) {
+      code = sigla;
+      return true;
+    }
+    return false;
+  });
+  return code || cleanString_(name);
+}
+
+function normalizeTeamFromTitle_(name) {
+  var code = teamCode_(name).toUpperCase();
+  return TEAM_NAMES[code] || cleanString_(name);
+}
+
+function parseMataMataTitle_(value) {
+  var title = cleanString_(value).replace(/\s+/g, " ");
+  var match = title.match(/^(?:(\d{1,2})\/(\d{1,2})\s+(\d{1,2})h(?:(\d{2}))?\s*[\u2013\u2014-]\s*)?(.+)$/i);
+  var confronto = (match && match[5] ? match[5] : title).trim();
+  var teams = confronto.match(/^(.+?)\s+x\s+(.+)$/i);
+  var homeRaw = teams ? cleanString_(teams[1]) : confronto;
+  var awayRaw = teams ? cleanString_(teams[2]) : "A definir";
+  var mandante = normalizeTeamFromTitle_(homeRaw);
+  var visitante = normalizeTeamFromTitle_(awayRaw);
+  var homeCode = teamCode_(homeRaw);
+  var awayCode = teams ? teamCode_(awayRaw) : "A definir";
+
+  return {
+    label: confronto,
+    date: match && match[1] && match[2] ? "2026-" + pad2_(match[2]) + "-" + pad2_(match[1]) : "",
+    horario: match && match[3] ? pad2_(match[3]) + ":" + pad2_(match[4] || "00") : "",
+    mandante: mandante,
+    visitante: visitante,
+    abreviacao: teams ? homeCode + " x " + awayCode : confronto
+  };
+}
+
+function isBrasilGame_(mandante, visitante) {
+  return normalizarTexto_(mandante) === "brasil" || normalizarTexto_(visitante) === "brasil";
+}
+
+function readMataMataSheet_(ss) {
+  var sheet = findSheet_(ss, SHEET_NAMES.mataMata, false);
+  if (!sheet) return emptyParsedPalpites_();
+
+  var values = sheet.getDataRange().getValues();
+  var headerRow = findMataMataHeader_(values);
+  if (headerRow < 0) return emptyParsedPalpites_();
+
+  var headers = values[headerRow].map(function (cell) { return normalizarTexto_(cell); });
+  var participantCol = headers.indexOf("participante");
+  if (participantCol < 0) return emptyParsedPalpites_();
+
+  var resultRow = findMataMataMarkerRow_(values, participantCol, "resultado oficial", headerRow + 1);
+  var classifiedRow = findMataMataMarkerRow_(values, participantCol, "classificado oficial", headerRow + 1);
+  var stopRow = resultRow > headerRow ? resultRow : values.length;
+  var games = findMataMataGameColumns_(values, headerRow);
+  var jogos = [];
+  var palpites = [];
+  var index = { jogos: {}, palpites: {} };
+
+  games.forEach(function (game, gameIndex) {
+    var info = parseMataMataTitle_(game.titulo);
+    var resultado = resultRow >= 0 ? formatScore_(values[resultRow][game.palpiteCol]) : null;
+    var classificadoOficial = classifiedRow >= 0 ? normalizarNome_(values[classifiedRow][game.classificadoCol]) : "";
+    var especial = game.tipo === "especial" || isBrasilGame_(info.mandante, info.visitante);
+    var id = slug_("mata-mata-" + (info.date || gameIndex + 1) + "-" + info.abreviacao + "-" + game.palpiteCol);
+    var idAliases = uniqueStrings_([
+      id,
+      slug_("mata-mata-" + info.label),
+      slug_((info.date || "") + "-" + info.abreviacao)
+    ]);
+
+    var jogo = {
+      id: id,
+      aliases: idAliases,
+      dia: info.date ? "Mata-mata " + info.date.slice(5).split("-").reverse().join("/") : "Mata-mata",
+      rodada: info.label,
+      data: info.date,
+      horario: info.horario,
+      mandante: info.mandante,
+      visitante: info.visitante,
+      abreviacao: info.abreviacao,
+      resultado: resultado,
+      classificado: classificadoOficial || null,
+      fase: "mata-mata",
+      tipoPontuacao: especial ? "especial" : "geral",
+      pontosMaximos: especial ? 30 : 25,
+      status: resultado ? "finalizado" : "agendado"
+    };
+    jogos.push(jogo);
+
+    idAliases.forEach(function (alias) {
+      index.jogos[alias] = {
+        id: id,
+        alias: alias,
+        cabecalho: game.titulo,
+        sheetName: sheet.getName(),
+        headerRow: headerRow + 1,
+        headerCol: game.palpiteCol + 1,
+        resultadoRow: resultRow >= 0 ? resultRow + 1 : null,
+        resultadoCol: game.palpiteCol + 1,
+        classificadoRow: classifiedRow >= 0 ? classifiedRow + 1 : null,
+        classificadoCol: game.classificadoCol + 1
+      };
+    });
+
+    for (var row = headerRow + 1; row < stopRow; row += 1) {
+      var participante = normalizarNome_(values[row][participantCol]);
+      if (!participante || shouldSkipParticipantName_(participante)) continue;
+
+      var palpite = formatScore_(values[row][game.palpiteCol]) || "";
+      var classificado = normalizarNome_(values[row][game.classificadoCol]);
+
+      idAliases.forEach(function (alias) {
+        index.palpites[alias + "::" + normalizarTexto_(participante)] = {
+          id: id,
+          alias: alias,
+          participante: participante,
+          cabecalho: game.titulo,
+          sheetName: sheet.getName(),
+          palpiteAtual: palpite,
+          classificadoAtual: classificado || "",
+          row: row + 1,
+          col: game.palpiteCol + 1,
+          classificadoCol: game.classificadoCol + 1
+        };
+      });
+
+      if (!palpite && !classificado) continue;
+      var pontuacao = calcularPontuacao_(palpite, resultado, {
+        fase: "mata-mata",
+        especial: especial,
+        classificadoPalpite: classificado,
+        classificadoOficial: classificadoOficial
+      });
+
+      palpites.push({
+        jogoId: id,
+        participante: participante,
+        palpite: palpite,
+        classificado: classificado || null,
+        pontos: pontuacao.pontos,
+        pontosPlacar: pontuacao.pontosPlacar || 0,
+        bonusClassificado: pontuacao.bonusClassificado || 0,
+        classificadoCorreto: Boolean(pontuacao.classificadoCorreto),
+        cravada: pontuacao.cravada,
+        tipo: pontuacao.tipo
+      });
+    }
+  });
+
+  return {
+    jogos: jogos,
+    palpites: palpites,
+    index: index
+  };
+}
+
 function mergeJogos_(jogosPalpites, jogosTabela) {
   if (!jogosTabela.length) return jogosPalpites;
   if (!jogosPalpites.length) return jogosTabela;
 
   var byKey = {};
   jogosPalpites.forEach(function (jogo) {
-    byKey[slug_(jogo.abreviacao)] = jogo;
+    byKey[jogo.id || slug_(jogo.abreviacao + "-" + (jogo.data || ""))] = jogo;
   });
 
   jogosTabela.forEach(function (jogoTabela) {
-    var key = slug_(jogoTabela.abreviacao);
+    var key = Object.keys(byKey).filter(function (candidate) {
+      var jogo = byKey[candidate];
+      return slug_(jogo.abreviacao) === slug_(jogoTabela.abreviacao) && (!jogoTabela.data || !jogo.data || jogoTabela.data === jogo.data);
+    })[0] || (jogoTabela.id || slug_(jogoTabela.abreviacao + "-" + (jogoTabela.data || "")));
     if (byKey[key]) {
       byKey[key] = Object.assign({}, byKey[key], {
         data: jogoTabela.data || byKey[key].data,
@@ -535,8 +792,17 @@ function mergeJogos_(jogosPalpites, jogosTabela) {
   return Object.keys(byKey).map(function (key) { return byKey[key]; });
 }
 
+function maxPontosFinalizados_(jogos) {
+  var total = (jogos || [])
+    .filter(function (jogo) { return jogo.resultado; })
+    .reduce(function (sum, jogo) {
+      return sum + Number(jogo.pontosMaximos || (jogo.fase === "mata-mata" ? (jogo.tipoPontuacao === "especial" ? 30 : 25) : 5));
+    }, 0);
+  return Math.max(1, total);
+}
+
 function completeRanking_(ranking, palpites, jogos) {
-  var finalizedGames = Math.max(1, jogos.filter(function (jogo) { return jogo.resultado; }).length);
+  var maxPontos = maxPontosFinalizados_(jogos);
   var byParticipant = {};
 
   palpites.forEach(function (palpite) {
@@ -553,14 +819,14 @@ function completeRanking_(ranking, palpites, jogos) {
       cravadas: Number(item.cravadas || bets.filter(function (palpite) { return palpite.cravada; }).length),
       palpites: bets.length || Number(item.palpites || 0),
       acertos: acertos,
-      aproveitamento: finalizedGames > 0 ? (pontos / (finalizedGames * 5)) * 100 : 0,
+      aproveitamento: (pontos / maxPontos) * 100,
       ordemOriginal: item.ordemOriginal === undefined ? index : item.ordemOriginal
     });
   });
 }
 
 function calcularRanking_(palpites, jogos) {
-  var finalizedGames = Math.max(1, (jogos || []).filter(function (jogo) { return jogo.resultado; }).length);
+  var maxPontos = maxPontosFinalizados_(jogos);
   var map = {};
   var ordem = [];
 
@@ -589,7 +855,7 @@ function calcularRanking_(palpites, jogos) {
   return ordem
     .map(function (key) {
       var item = map[key];
-      item.aproveitamento = (item.pontos / (finalizedGames * 5)) * 100;
+      item.aproveitamento = (item.pontos / maxPontos) * 100;
       return item;
     })
     .sort(function (a, b) {
@@ -652,10 +918,12 @@ function adicionarParticipante_(payload) {
 
   var ss = getSpreadsheet_();
   var palpitesSheet = findSheet_(ss, SHEET_NAMES.palpites, true);
+  var mataMataSheet = findSheet_(ss, SHEET_NAMES.mataMata, false);
   var rankingSheet = findSheet_(ss, SHEET_NAMES.ranking, true);
   var pagamentoSheet = findSheet_(ss, SHEET_NAMES.pagamento, true);
 
   var resultadoPalpites = adicionarParticipanteNosPalpites_(palpitesSheet, participante);
+  var resultadoMataMata = mataMataSheet ? adicionarParticipanteNoMataMata_(mataMataSheet, participante) : { adicionados: 0, existentes: 0 };
   var resultadoRanking = adicionarParticipanteNoRanking_(rankingSheet, participante);
   var resultadoPagamento = adicionarParticipanteNoPagamento_(pagamentoSheet, participante);
   recalcularPontuacaoPlanilha_(ss);
@@ -685,8 +953,8 @@ function adicionarParticipante_(payload) {
       totalAlvos +
       " jogos, no Ranking e em Pagamentos.",
     participante: participante,
-    jogosAdicionados: resultadoPalpites.adicionados,
-    jogosExistentes: resultadoPalpites.existentes,
+    jogosAdicionados: resultadoPalpites.adicionados + resultadoMataMata.adicionados,
+    jogosExistentes: resultadoPalpites.existentes + resultadoMataMata.existentes,
     rankingAdicionado: resultadoRanking.adicionado,
     pagamentoAdicionado: resultadoPagamento.adicionado
   };
@@ -746,6 +1014,62 @@ function adicionarParticipanteNosPalpites_(sheet, participante) {
   return { adicionados: adicionados, existentes: existentes };
 }
 
+function adicionarParticipanteNoMataMata_(sheet, participante) {
+  var values = sheet.getDataRange().getValues();
+  var headerRow = findMataMataHeader_(values);
+  if (headerRow < 0) throw new Error("Cabeçalho da aba MATA-MATA não encontrado.");
+
+  var headers = values[headerRow].map(function (cell) { return normalizarTexto_(cell); });
+  var participantCol = headers.indexOf("participante");
+  if (participantCol < 0) throw new Error("Coluna de participantes da aba MATA-MATA nÃ£o encontrada.");
+
+  var resultRow = findMataMataMarkerRow_(values, participantCol, "resultado oficial", headerRow + 1);
+  if (resultRow < 0) throw new Error("Linha de resultado oficial da aba MATA-MATA nÃ£o encontrada.");
+
+  var existingRow = findRowByName_(values, headerRow + 1, participantCol, participante);
+  if (existingRow >= 0 && existingRow < resultRow) return { adicionados: 0, existentes: 1 };
+
+  var games = findMataMataGameColumns_(values, headerRow);
+  var targetRowIndex = resultRow - 1;
+  var targetIsEmpty = targetRowIndex > headerRow && isRowEmpty_(values[targetRowIndex] || []);
+  if (!targetIsEmpty) {
+    sheet.insertRowsBefore(resultRow + 1, 1);
+    targetRowIndex = resultRow;
+  }
+
+  var sourceRowIndex = targetRowIndex - 1;
+  while (
+    sourceRowIndex > headerRow &&
+    (!normalizarNome_(values[sourceRowIndex] && values[sourceRowIndex][participantCol]) ||
+      shouldSkipParticipantName_(values[sourceRowIndex] && values[sourceRowIndex][participantCol]))
+  ) {
+    sourceRowIndex -= 1;
+  }
+  if (sourceRowIndex <= headerRow) throw new Error("Linha modelo da aba MATA-MATA nÃ£o encontrada.");
+
+  var targetRow = targetRowIndex + 1;
+  var sourceRow = sourceRowIndex + 1;
+  var width = Math.max(sheet.getLastColumn(), headers.length);
+  sheet.getRange(sourceRow, 1, 1, width).copyTo(sheet.getRange(targetRow, 1, 1, width));
+  sheet.getRange(targetRow, participantCol + 1).setValue(participante);
+
+  games.forEach(function (game) {
+    sheet.getRange(targetRow, game.palpiteCol + 1).clearContent();
+    sheet.getRange(targetRow, game.classificadoCol + 1).clearContent();
+    var pointsRange = sheet.getRange(targetRow, game.pontosCol + 1);
+    if (!pointsRange.getFormula()) pointsRange.setValue(0);
+  });
+
+  ["total mata", "cravadas mata", "bonus classif", "bônus classif", "total geral"].forEach(function (header) {
+    var col = findColumn_(headers, [header]);
+    if (col < 0) return;
+    var range = sheet.getRange(targetRow, col + 1);
+    if (!range.getFormula()) range.setValue(0);
+  });
+
+  return { adicionados: games.length, existentes: 0 };
+}
+
 function findPalpiteBlocks_(values) {
   var blocks = [];
 
@@ -791,12 +1115,148 @@ function ensureScoringSetup_(ss) {
   recalcularPontuacaoPlanilha_(ss);
 }
 
+function setValuesPreservingFormulas_(sheet, startRow, startCol, values) {
+  for (var row = 0; row < values.length; row += 1) {
+    for (var col = 0; col < values[row].length; col += 1) {
+      var range = sheet.getRange(startRow + row, startCol + col);
+      if (!range.getFormula()) range.setValue(values[row][col]);
+    }
+  }
+}
+
+function addScoringTotal_(totais, participante, pontos, cravadas) {
+  if (!participante || shouldSkipParticipantName_(participante)) return;
+  var key = normalizarTexto_(participante);
+  if (!totais[key]) {
+    totais[key] = { participante: participante, pontos: 0, cravadas: 0, ordem: 0 };
+  }
+  totais[key].pontos += Number(pontos || 0);
+  totais[key].cravadas += Number(cravadas || 0);
+}
+
+function scoreBackground_(pontuacao) {
+  if (pontuacao.tipo === "exato") return SCORE_COLORS.exato;
+  if (pontuacao.pontosPlacar > 0) return SCORE_COLORS.pontuado;
+  return SCORE_COLORS.neutro;
+}
+
+function recalcularPontuacaoMataMata_(ss) {
+  var sheet = findSheet_(ss, SHEET_NAMES.mataMata, false);
+  if (!sheet) return {};
+
+  var values = sheet.getDataRange().getValues();
+  var headerRow = findMataMataHeader_(values);
+  if (headerRow < 0) return {};
+
+  var headers = values[headerRow].map(function (cell) { return normalizarTexto_(cell); });
+  var participantCol = headers.indexOf("participante");
+  if (participantCol < 0) return {};
+
+  var saldoCol = findColumn_(headers, ["saldo grupos"]);
+  var totalMataCol = findColumn_(headers, ["total mata"]);
+  var cravadasMataCol = findColumn_(headers, ["cravadas mata"]);
+  var bonusCol = findColumn_(headers, ["bonus classif", "bônus classif"]);
+  var totalGeralCol = findColumn_(headers, ["total geral"]);
+  var resultRow = findMataMataMarkerRow_(values, participantCol, "resultado oficial", headerRow + 1);
+  var classifiedRow = findMataMataMarkerRow_(values, participantCol, "classificado oficial", headerRow + 1);
+  var stopRow = resultRow > headerRow ? resultRow : values.length;
+  var rowCount = stopRow - headerRow - 1;
+  if (rowCount <= 0) return {};
+
+  var games = findMataMataGameColumns_(values, headerRow);
+  var totais = {};
+  var totalMataValues = [];
+  var cravadasValues = [];
+  var bonusValues = [];
+  var totalGeralValues = [];
+  var rowSummaries = [];
+
+  for (var row = headerRow + 1; row < stopRow; row += 1) {
+    var participante = normalizarNome_(values[row][participantCol]);
+    var summary = { participante: participante, totalMata: 0, cravadas: 0, bonus: 0 };
+
+    games.forEach(function (game) {
+      var info = parseMataMataTitle_(game.titulo);
+      var resultado = resultRow >= 0 ? formatScore_(values[resultRow][game.palpiteCol]) : null;
+      var classificadoOficial = classifiedRow >= 0 ? normalizarNome_(values[classifiedRow][game.classificadoCol]) : "";
+      var especial = game.tipo === "especial" || isBrasilGame_(info.mandante, info.visitante);
+      var pontuacao = participante
+        ? calcularPontuacao_(values[row][game.palpiteCol], resultado, {
+            fase: "mata-mata",
+            especial: especial,
+            classificadoPalpite: values[row][game.classificadoCol],
+            classificadoOficial: classificadoOficial
+          })
+        : { pontos: 0, pontosPlacar: 0, bonusClassificado: 0, cravada: false, tipo: "pendente" };
+
+      summary.totalMata += pontuacao.pontos;
+      summary.cravadas += pontuacao.cravada ? 1 : 0;
+      summary.bonus += Number(pontuacao.bonusClassificado || 0);
+    });
+
+    rowSummaries.push(summary);
+    if (participante && !shouldSkipParticipantName_(participante)) {
+      addScoringTotal_(totais, participante, summary.totalMata, summary.cravadas);
+    }
+
+    var saldo = saldoCol >= 0 ? toNumber_(values[row][saldoCol]) : 0;
+    totalMataValues.push([participante ? summary.totalMata : ""]);
+    cravadasValues.push([participante ? summary.cravadas : ""]);
+    bonusValues.push([participante ? summary.bonus : ""]);
+    totalGeralValues.push([participante ? saldo + summary.totalMata : ""]);
+  }
+
+  games.forEach(function (game) {
+    var backgrounds = [];
+    var fontColors = [];
+    var fontWeights = [];
+    var points = [];
+
+    for (var row = headerRow + 1; row < stopRow; row += 1) {
+      var participante = normalizarNome_(values[row][participantCol]);
+      var info = parseMataMataTitle_(game.titulo);
+      var resultado = resultRow >= 0 ? formatScore_(values[resultRow][game.palpiteCol]) : null;
+      var classificadoOficial = classifiedRow >= 0 ? normalizarNome_(values[classifiedRow][game.classificadoCol]) : "";
+      var especial = game.tipo === "especial" || isBrasilGame_(info.mandante, info.visitante);
+      var pontuacao = participante
+        ? calcularPontuacao_(values[row][game.palpiteCol], resultado, {
+            fase: "mata-mata",
+            especial: especial,
+            classificadoPalpite: values[row][game.classificadoCol],
+            classificadoOficial: classificadoOficial
+          })
+        : { pontos: 0, pontosPlacar: 0, bonusClassificado: 0, classificadoCorreto: false, tipo: "pendente" };
+      var pontuado = pontuacao.pontos > 0;
+      var classificadoBg = pontuacao.classificadoCorreto ? SCORE_COLORS.classificado : SCORE_COLORS.neutro;
+      backgrounds.push([scoreBackground_(pontuacao), classificadoBg, pontuado ? SCORE_COLORS.pontuado : SCORE_COLORS.neutro]);
+      fontColors.push([pontuacao.pontosPlacar > 0 ? SCORE_COLORS.textoClaro : SCORE_COLORS.textoEscuro, SCORE_COLORS.textoEscuro, pontuado ? SCORE_COLORS.textoClaro : SCORE_COLORS.textoEscuro]);
+      fontWeights.push([pontuacao.pontosPlacar > 0 ? "bold" : "normal", pontuacao.classificadoCorreto ? "bold" : "normal", pontuado ? "bold" : "normal"]);
+      points.push([participante ? pontuacao.pontos : ""]);
+    }
+
+    sheet
+      .getRange(headerRow + 2, game.palpiteCol + 1, rowCount, 3)
+      .setBackgrounds(backgrounds)
+      .setFontColors(fontColors)
+      .setFontWeights(fontWeights);
+    setValuesPreservingFormulas_(sheet, headerRow + 2, game.pontosCol + 1, points);
+  });
+
+  if (totalMataCol >= 0) setValuesPreservingFormulas_(sheet, headerRow + 2, totalMataCol + 1, totalMataValues);
+  if (cravadasMataCol >= 0) setValuesPreservingFormulas_(sheet, headerRow + 2, cravadasMataCol + 1, cravadasValues);
+  if (bonusCol >= 0) setValuesPreservingFormulas_(sheet, headerRow + 2, bonusCol + 1, bonusValues);
+  if (totalGeralCol >= 0) setValuesPreservingFormulas_(sheet, headerRow + 2, totalGeralCol + 1, totalGeralValues);
+
+  return totais;
+}
+
 function recalcularPontuacaoPlanilha_(ss) {
   SpreadsheetApp.flush();
-  var palpitesSheet = findSheet_(ss, SHEET_NAMES.palpites, true);
-  var values = palpitesSheet.getDataRange().getValues();
+  var palpitesSheet = findSheet_(ss, SHEET_NAMES.palpites, false);
+  var values = palpitesSheet ? palpitesSheet.getDataRange().getValues() : [];
   var blocks = findPalpiteBlocks_(values);
-  if (!blocks.length) throw new Error("Nenhum bloco de jogos encontrado para recalcular a pontuação.");
+  var hasMataMata = Boolean(findSheet_(ss, SHEET_NAMES.mataMata, false));
+  if (!blocks.length && !hasMataMata) throw new Error("Nenhum bloco de jogos encontrado para recalcular a pontuação.");
 
   var totais = {};
   var ordemParticipantes = [];
@@ -867,11 +1327,26 @@ function recalcularPontuacaoPlanilha_(ss) {
     }
 
     if (block.totalCol >= 0) {
-      palpitesSheet.getRange(block.headerRow + 2, block.totalCol + 1, rowCount, 1).setValues(totaisDoBloco);
+      setValuesPreservingFormulas_(palpitesSheet, block.headerRow + 2, block.totalCol + 1, totaisDoBloco);
     }
     if (block.cravadasCol >= 0) {
-      palpitesSheet.getRange(block.headerRow + 2, block.cravadasCol + 1, rowCount, 1).setValues(cravadasDoBloco);
+      setValuesPreservingFormulas_(palpitesSheet, block.headerRow + 2, block.cravadasCol + 1, cravadasDoBloco);
     }
+  });
+
+  var totaisMataMata = recalcularPontuacaoMataMata_(ss);
+  Object.keys(totaisMataMata).forEach(function (key) {
+    if (!totais[key]) {
+      totais[key] = {
+        participante: totaisMataMata[key].participante,
+        pontos: 0,
+        cravadas: 0,
+        ordem: ordemParticipantes.length
+      };
+      ordemParticipantes.push(key);
+    }
+    totais[key].pontos += Number(totaisMataMata[key].pontos || 0);
+    totais[key].cravadas += Number(totaisMataMata[key].cravadas || 0);
   });
 
   atualizarBaseRanking_(ss, totais);
@@ -917,9 +1392,9 @@ function atualizarBaseRanking_(ss, totais) {
   }
 
   if (!rowCount) throw new Error("Nenhum participante encontrado na base do Ranking.");
-  sheet.getRange(firstRow + 1, pointsCol + 1, rowCount, 1).setValues(points);
-  sheet.getRange(firstRow + 1, cravadasCol + 1, rowCount, 1).setValues(cravadas);
-  sheet.getRange(firstRow + 1, orderCol + 1, rowCount, 1).setValues(orders);
+  setValuesPreservingFormulas_(sheet, firstRow + 1, pointsCol + 1, points);
+  setValuesPreservingFormulas_(sheet, firstRow + 1, cravadasCol + 1, cravadas);
+  setValuesPreservingFormulas_(sheet, firstRow + 1, orderCol + 1, orders);
 }
 
 function adicionarParticipanteNoRanking_(sheet, participante) {
@@ -1071,9 +1546,17 @@ function importarPalpitesEmLote_(payload) {
   if (!itens.length) throw new Error("Nenhum palpite enviado para importação.");
 
   var ss = getSpreadsheet_();
-  var sheet = findSheet_(ss, SHEET_NAMES.palpites, true);
-  var parsed = readPalpitesSheet_(ss);
-  var values = sheet.getDataRange().getValues();
+  var defaultSheet = findSheet_(ss, SHEET_NAMES.palpites, false) || findSheet_(ss, SHEET_NAMES.mataMata, true);
+  var parsed = readAllPalpites_(ss);
+  var valuesBySheet = {};
+  function sheetForTarget(target) {
+    return target && target.sheetName ? ss.getSheetByName(target.sheetName) : defaultSheet;
+  }
+  function valuesForSheet(targetSheet) {
+    var name = targetSheet.getName();
+    if (!valuesBySheet[name]) valuesBySheet[name] = targetSheet.getDataRange().getValues();
+    return valuesBySheet[name];
+  }
   var detalhes = [];
   var erros = [];
   var updates = [];
@@ -1085,6 +1568,7 @@ function importarPalpitesEmLote_(payload) {
       var jogoId = String(item.jogoId || "");
       var golsCasa = Number(item.golsCasa);
       var golsFora = Number(item.golsFora);
+      var classificado = normalizarNome_(item.classificado);
       var decisao = String(item.decisao || "substituir");
 
       if (!participante) throw new Error("Participante obrigatório.");
@@ -1094,19 +1578,34 @@ function importarPalpitesEmLote_(payload) {
       var jogo = (jogoId ? findJogoById_(parsed.jogos, jogoId) : null) || findJogoByTimes_(parsed.jogos, item);
       if (!jogo) throw new Error("Jogo não encontrado na aba de palpites.");
 
-      var target =
-        findValidatedTargetByCell_(values, item, participante, jogo) ||
-        findPalpiteTarget_(parsed, item, participante, jogo) ||
+      var target = findPalpiteTarget_(parsed, item, participante, jogo);
+      var indexedTarget = target;
+      var targetSheet = sheetForTarget(target);
+      var values = valuesForSheet(targetSheet);
+      var validatedTarget = findValidatedTargetByCell_(values, item, participante, jogo);
+      if (validatedTarget && indexedTarget && indexedTarget.classificadoCol) {
+        validatedTarget.classificadoCol = indexedTarget.classificadoCol;
+      }
+      target =
+        validatedTarget ||
+        target ||
         findPalpiteTargetInValues_(values, participante, jogo);
       if (!target) throw new Error("Célula de palpite não encontrada para participante e jogo.");
+      if (!target.classificadoCol && jogo.fase === "mata-mata") target.classificadoCol = target.col + 1;
+      if (!target.sheetName) target.sheetName = targetSheet.getName();
+      targetSheet = sheetForTarget(target);
+      values = valuesForSheet(targetSheet);
 
       var novoPalpite = golsCasa + "x" + golsFora;
       var atual = formatScore_(values[target.row - 1][target.col - 1]);
+      var classificadoAtual = target.classificadoCol ? normalizarNome_(values[target.row - 1][target.classificadoCol - 1]) : "";
+      var classificadoMudou = Boolean(classificado && target.classificadoCol && classificadoAtual !== classificado);
+      var novoDetalhe = classificado ? novoPalpite + " / " + classificado : novoPalpite;
       var detalheBase = {
         participante: participante,
         jogo: jogo.mandante + " x " + jogo.visitante,
         atual: atual || "",
-        novo: novoPalpite
+        novo: novoDetalhe
       };
 
       if (decisao === "ignorar") {
@@ -1121,21 +1620,28 @@ function importarPalpitesEmLote_(payload) {
         return;
       }
 
-      if (atual === novoPalpite) {
+      if (atual === novoPalpite && !classificadoMudou) {
         ignorados += 1;
         detalhes.push(Object.assign({}, detalheBase, { status: "sem_alteracao" }));
         return;
       }
 
-      if (sheet.getRange(target.row, target.col).getFormula()) {
+      if (targetSheet.getRange(target.row, target.col).getFormula()) {
         throw new Error("A célula de destino contém fórmula e não será sobrescrita.");
+      }
+      if (classificado && target.classificadoCol && targetSheet.getRange(target.row, target.classificadoCol).getFormula()) {
+        throw new Error("A célula de classificado contém fórmula e não será sobrescrita.");
       }
 
       updates.push({
+        sheetName: targetSheet.getName(),
         row: target.row,
         col: target.col,
         value: novoPalpite,
         atual: atual || "",
+        classificadoCol: target.classificadoCol || null,
+        classificadoValue: classificado,
+        classificadoAtual: classificadoAtual || "",
         detalhe: Object.assign({}, detalheBase, {
           celula: columnName_(target.col) + target.row
         })
@@ -1152,19 +1658,41 @@ function importarPalpitesEmLote_(payload) {
     }
   });
 
-  writePalpiteUpdates_(sheet, updates);
+  var updatesBySheet = {};
+  updates.forEach(function (update) {
+    if (!updatesBySheet[update.sheetName]) updatesBySheet[update.sheetName] = [];
+    updatesBySheet[update.sheetName].push(update);
+  });
+  Object.keys(updatesBySheet).forEach(function (sheetName) {
+    var sheet = ss.getSheetByName(sheetName);
+    writePalpiteUpdates_(sheet, updatesBySheet[sheetName]);
+    updatesBySheet[sheetName].forEach(function (update) {
+      if (update.classificadoValue && update.classificadoCol) {
+        setCellValueSafe_(sheet, update.row, update.classificadoCol, update.classificadoValue);
+      }
+    });
+  });
   SpreadsheetApp.flush();
   if (updates.length) recalcularPontuacaoPlanilha_(ss);
 
   var importados = 0;
   var atualizados = 0;
   updates.forEach(function (update) {
-    var gravado = formatScore_(sheet.getRange(update.row, update.col).getValue());
+    var gravado = formatScore_(ss.getSheetByName(update.sheetName).getRange(update.row, update.col).getValue());
     if (gravado !== update.value) {
       var verificationMessage = "Falha ao confirmar gravação em " + columnName_(update.col) + update.row + ".";
       erros.push(verificationMessage);
       detalhes.push(Object.assign({}, update.detalhe, { status: "erro", erro: verificationMessage }));
       return;
+    }
+    if (update.classificadoValue && update.classificadoCol) {
+      var classificadoGravado = normalizarNome_(ss.getSheetByName(update.sheetName).getRange(update.row, update.classificadoCol).getValue());
+      if (classificadoGravado !== update.classificadoValue) {
+        var classificadoMessage = "Falha ao confirmar classificado em " + columnName_(update.classificadoCol) + update.row + ".";
+        erros.push(classificadoMessage);
+        detalhes.push(Object.assign({}, update.detalhe, { status: "erro", erro: classificadoMessage }));
+        return;
+      }
     }
 
     if (update.atual) {
@@ -1275,7 +1803,8 @@ function findValidatedTargetByCell_(values, payload, participante, jogo) {
 }
 
 function parseCellAddress_(value) {
-  var match = String(value || "").trim().toUpperCase().match(/^([A-Z]+)(\d+)$/);
+  var cell = String(value || "").trim().split("!").pop();
+  var match = String(cell || "").toUpperCase().match(/^([A-Z]+)(\d+)$/);
   if (!match) return null;
   var col = 0;
   for (var index = 0; index < match[1].length; index += 1) {
@@ -1440,14 +1969,17 @@ function atualizarResultado_(payload) {
   if (!resultado) throw new Error("Resultado inválido. Use formato 2x1.");
 
   var ss = getSpreadsheet_();
-  var parsed = readPalpitesSheet_(ss);
+  var parsed = readAllPalpites_(ss);
   var target = parsed.index.jogos[jogoId];
   if (!target || !target.resultadoRow || !target.resultadoCol) {
     throw new Error("Célula de resultado não encontrada para este jogo.");
   }
 
-  var sheet = findSheet_(ss, SHEET_NAMES.palpites, true);
+  var sheet = target.sheetName ? ss.getSheetByName(target.sheetName) : findSheet_(ss, SHEET_NAMES.palpites, true);
   setCellValueSafe_(sheet, target.resultadoRow, target.resultadoCol, resultado);
+  if (target.classificadoRow && target.classificadoCol && normalizarNome_(payload.classificado)) {
+    setCellValueSafe_(sheet, target.classificadoRow, target.classificadoCol, normalizarNome_(payload.classificado));
+  }
   recalcularPontuacaoPlanilha_(ss);
 }
 
@@ -1458,22 +1990,39 @@ function atualizarPalpite_(payload) {
   if (!participante || !palpite) throw new Error("Participante e palpite válido são obrigatórios.");
 
   var ss = getSpreadsheet_();
-  var parsed = readPalpitesSheet_(ss);
+  var parsed = readAllPalpites_(ss);
   var jogo = (jogoId ? findJogoById_(parsed.jogos, jogoId) : null) || findJogoByTimes_(parsed.jogos, payload);
   if (!jogo) throw new Error("Jogo nao encontrado na aba de palpites.");
 
-  var sheet = findSheet_(ss, SHEET_NAMES.palpites, true);
+  var target = findPalpiteTarget_(parsed, payload, participante, jogo);
+  var indexedTarget = target;
+  var sheet = target && target.sheetName ? ss.getSheetByName(target.sheetName) : findSheet_(ss, SHEET_NAMES.palpites, true);
   var values = sheet.getDataRange().getValues();
-  var target =
-    findValidatedTargetByCell_(values, payload, participante, jogo) ||
-    findPalpiteTarget_(parsed, payload, participante, jogo) ||
+  var validatedTarget = findValidatedTargetByCell_(values, payload, participante, jogo);
+  if (validatedTarget && indexedTarget && indexedTarget.classificadoCol) {
+    validatedTarget.classificadoCol = indexedTarget.classificadoCol;
+  }
+  target =
+    validatedTarget ||
+    target ||
     findPalpiteTargetInValues_(values, participante, jogo);
   if (!target) throw new Error("Célula de palpite não encontrada.");
+  if (!target.classificadoCol && jogo.fase === "mata-mata") target.classificadoCol = target.col + 1;
+  if (target.sheetName) sheet = ss.getSheetByName(target.sheetName);
 
   setCellValueSafe_(sheet, target.row, target.col, palpite);
+  if (target.classificadoCol && normalizarNome_(payload.classificado)) {
+    setCellValueSafe_(sheet, target.row, target.classificadoCol, normalizarNome_(payload.classificado));
+  }
   SpreadsheetApp.flush();
   if (formatScore_(sheet.getRange(target.row, target.col).getValue()) !== palpite) {
     throw new Error("O palpite não foi confirmado na célula " + columnName_(target.col) + target.row + ".");
+  }
+  if (target.classificadoCol && normalizarNome_(payload.classificado)) {
+    var classificadoGravado = normalizarNome_(sheet.getRange(target.row, target.classificadoCol).getValue());
+    if (classificadoGravado !== normalizarNome_(payload.classificado)) {
+      throw new Error("O classificado não foi confirmado na célula " + columnName_(target.classificadoCol) + target.row + ".");
+    }
   }
   recalcularPontuacaoPlanilha_(ss);
 }
@@ -1674,14 +2223,70 @@ function shouldSkipParticipantName_(name) {
   return /^(?:total|resultado|oficial|dia(?:\s+\d+.*)?|data|horario|rodada|participante|nome|sabado|domingo|segunda|terca|quarta|quinta|sexta)$/.test(text);
 }
 
-function calcularPontuacao_(palpite, resultado) {
+function calcularPontuacao_(palpite, resultado, options) {
+  options = options || {};
   var p = parseScore_(palpite);
   var r = parseScore_(resultado);
-  if (!p || !r) return { pontos: 0, cravada: false, tipo: "pendente" };
-  if (p.casa === r.casa && p.fora === r.fora) return { pontos: 5, cravada: true, tipo: "exato" };
-  if (winner_(p) === "empate" && winner_(r) === "empate") return { pontos: 2, cravada: false, tipo: "empate" };
-  if (winner_(p) === winner_(r)) return { pontos: 2, cravada: false, tipo: "vencedor" };
-  return { pontos: 0, cravada: false, tipo: "erro" };
+  var isMataMata = options.fase === "mata-mata";
+  var pontosExato = isMataMata ? (options.especial ? 25 : 20) : 5;
+  var pontosParcial = isMataMata ? (options.especial ? 15 : 10) : 2;
+  var classificadoCorreto =
+    isMataMata &&
+    normalizarTexto_(options.classificadoPalpite) &&
+    normalizarTexto_(options.classificadoPalpite) === normalizarTexto_(options.classificadoOficial);
+  var bonusClassificado = classificadoCorreto ? 5 : 0;
+
+  if (!r) {
+    return { pontos: 0, pontosPlacar: 0, bonusClassificado: 0, classificadoCorreto: false, cravada: false, tipo: "pendente" };
+  }
+  if (!p) {
+    return {
+      pontos: bonusClassificado,
+      pontosPlacar: 0,
+      bonusClassificado: bonusClassificado,
+      classificadoCorreto: Boolean(classificadoCorreto),
+      cravada: false,
+      tipo: bonusClassificado > 0 ? "classificado" : "pendente"
+    };
+  }
+  if (p.casa === r.casa && p.fora === r.fora) {
+    return {
+      pontos: pontosExato + bonusClassificado,
+      pontosPlacar: pontosExato,
+      bonusClassificado: bonusClassificado,
+      classificadoCorreto: Boolean(classificadoCorreto),
+      cravada: true,
+      tipo: "exato"
+    };
+  }
+  if (winner_(p) === "empate" && winner_(r) === "empate") {
+    return {
+      pontos: pontosParcial + bonusClassificado,
+      pontosPlacar: pontosParcial,
+      bonusClassificado: bonusClassificado,
+      classificadoCorreto: Boolean(classificadoCorreto),
+      cravada: false,
+      tipo: "empate"
+    };
+  }
+  if (winner_(p) === winner_(r)) {
+    return {
+      pontos: pontosParcial + bonusClassificado,
+      pontosPlacar: pontosParcial,
+      bonusClassificado: bonusClassificado,
+      classificadoCorreto: Boolean(classificadoCorreto),
+      cravada: false,
+      tipo: "vencedor"
+    };
+  }
+  return {
+    pontos: bonusClassificado,
+    pontosPlacar: 0,
+    bonusClassificado: bonusClassificado,
+    classificadoCorreto: Boolean(classificadoCorreto),
+    cravada: false,
+    tipo: bonusClassificado > 0 ? "classificado" : "erro"
+  };
 }
 
 function parseScore_(value) {

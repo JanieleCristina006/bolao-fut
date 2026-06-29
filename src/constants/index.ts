@@ -14,6 +14,7 @@ export const PONTUACAO_LABELS = {
   exato: "Placar exato",
   vencedor: "Vencedor correto",
   empate: "Empate correto",
+  classificado: "Classificado correto",
   erro: "Palpite errado",
   pendente: "Aguardando resultado"
 } as const;

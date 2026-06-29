@@ -10,21 +10,40 @@ function legenda(): string {
     .join(" | ");
 }
 
+function formatarBonus(palpite: Palpite): string {
+  return String(palpite.bonusClassificado ?? 0);
+}
+
 export function gerarPdfPalpitesDeJogo(jogo: Jogo, palpites: Palpite[]): void {
   const doc = criarDocumento(`Palpites - ${jogo.abreviacao}`);
+  const isMataMata = jogo.fase === "mata-mata";
   doc.setFontSize(10);
-  doc.text(`${formatarData(jogo.data)} às ${jogo.horario} | Resultado: ${jogo.resultado ?? "pendente"}`, 14, 39);
+  doc.text(
+    `${formatarData(jogo.data)} às ${jogo.horario} | Resultado: ${jogo.resultado ?? "pendente"}${
+      isMataMata ? ` | Classificado: ${jogo.classificado ?? "pendente"}` : ""
+    }`,
+    14,
+    39
+  );
 
   autoTable(doc, {
     startY: 45,
-    head: [["Participante", "Palpite", "Pontos", "Tipo"]],
-    body: palpites.map((palpite) => [
-      palpite.participante,
-      palpite.palpite || "-",
-      String(palpite.pontos),
-      PONTUACAO_LABELS[palpite.tipo]
-    ]),
-    styles: { fontSize: 9, cellPadding: 2 },
+    head: isMataMata
+      ? [["Participante", "Palpite 90m", "Classificado", "Pontos", "Bonus", "Tipo"]]
+      : [["Participante", "Palpite", "Pontos", "Bonus", "Tipo"]],
+    body: palpites.map((palpite) =>
+      isMataMata
+        ? [
+            palpite.participante,
+            palpite.palpite || "-",
+            palpite.classificado || "-",
+            String(palpite.pontos),
+            formatarBonus(palpite),
+            PONTUACAO_LABELS[palpite.tipo]
+          ]
+        : [palpite.participante, palpite.palpite || "-", String(palpite.pontos), formatarBonus(palpite), PONTUACAO_LABELS[palpite.tipo]]
+    ),
+    styles: { fontSize: isMataMata ? 8 : 9, cellPadding: 2 },
     headStyles: { fillColor: [217, 4, 41], textColor: 255 },
     margin: { left: 14, right: 14 }
   });
@@ -42,9 +61,9 @@ export function gerarPdfPalpitesFiltrados(jogos: Jogo[], palpites: Palpite[]): v
       .map((palpite) => [
         jogo.abreviacao,
         `${formatarData(jogo.data)} ${jogo.horario}`,
-        jogo.resultado ?? "pendente",
+        jogo.fase === "mata-mata" ? `${jogo.resultado ?? "pendente"} / ${jogo.classificado ?? "pendente"}` : (jogo.resultado ?? "pendente"),
         palpite.participante,
-        palpite.palpite,
+        jogo.fase === "mata-mata" ? `${palpite.palpite || "-"} / ${palpite.classificado || "-"}` : palpite.palpite,
         String(palpite.pontos),
         PONTUACAO_LABELS[palpite.tipo]
       ])
@@ -71,8 +90,8 @@ export function gerarPdfPalpitesParticipante(nome: string, jogos: Jogo[], palpit
     return [
       jogo.abreviacao,
       `${formatarData(jogo.data)} ${jogo.horario}`,
-      jogo.resultado ?? "pendente",
-      palpite?.palpite ?? "-",
+      jogo.fase === "mata-mata" ? `${jogo.resultado ?? "pendente"} / ${jogo.classificado ?? "pendente"}` : (jogo.resultado ?? "pendente"),
+      jogo.fase === "mata-mata" ? `${palpite?.palpite ?? "-"} / ${palpite?.classificado ?? "-"}` : (palpite?.palpite ?? "-"),
       String(palpite?.pontos ?? 0),
       palpite ? PONTUACAO_LABELS[palpite.tipo] : "Sem palpite"
     ];

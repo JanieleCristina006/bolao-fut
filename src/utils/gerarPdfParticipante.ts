@@ -20,8 +20,8 @@ export function gerarPdfParticipante(participante: ParticipanteDetalhe, jogos: J
       return [
         jogo.abreviacao,
         `${formatarData(jogo.data)} ${jogo.horario}`,
-        jogo.resultado ?? "pendente",
-        palpite?.palpite ?? "-",
+        jogo.fase === "mata-mata" ? `${jogo.resultado ?? "pendente"} / ${jogo.classificado ?? "pendente"}` : (jogo.resultado ?? "pendente"),
+        jogo.fase === "mata-mata" ? `${palpite?.palpite ?? "-"} / ${palpite?.classificado ?? "-"}` : (palpite?.palpite ?? "-"),
         String(palpite?.pontos ?? 0),
         palpite?.tipo ?? "sem palpite"
       ];

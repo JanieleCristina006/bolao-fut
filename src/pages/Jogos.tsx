@@ -126,11 +126,19 @@ export function Jogos() {
       showToast("Informe o token administrativo na página Jogos.");
       return false;
     }
+    const classificado =
+      jogo.fase === "mata-mata"
+        ? window.prompt(`Quem se classificou em ${jogo.mandante} x ${jogo.visitante}?`, jogo.classificado ?? jogo.mandante)?.trim()
+        : undefined;
+    if (jogo.fase === "mata-mata" && !classificado) {
+      showToast("Informe o classificado oficial para jogos de mata-mata.");
+      return false;
+    }
     if (!window.confirm(`Confirmar resultado ${resultado} para ${jogo.mandante} x ${jogo.visitante}?`)) return false;
 
     setSavingResultId(jogo.id);
     try {
-      const resposta = await api.atualizarResultado({ jogoId: jogo.id, resultado, adminToken });
+      const resposta = await api.atualizarResultado({ jogoId: jogo.id, resultado, classificado, adminToken });
       await refetch();
       showToast(resposta.message);
       return true;

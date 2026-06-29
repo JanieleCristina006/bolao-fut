@@ -1,5 +1,6 @@
 import { useCallback, useMemo, useState } from "react";
-import { CalendarClock, CheckCircle2, CreditCard, Download, RefreshCw, RotateCcw, Search, Target, Trophy, TrendingUp } from "lucide-react";
+import { Link } from "react-router-dom";
+import { ArrowRight, CalendarClock, CheckCircle2, CreditCard, Download, RefreshCw, RotateCcw, Search, Target, Trophy, TrendingUp, Users } from "lucide-react";
 import { useAuth } from "../auth/AuthContext";
 import { Badge } from "../components/ui/Badge";
 import { Button } from "../components/ui/Button";
@@ -37,6 +38,7 @@ export function MeuPerfil() {
   const { session } = useAuth();
   const participanteNome = session?.role === "participant" ? session.participanteNome : "";
   const [buscaPalpite, setBuscaPalpite] = useState("");
+  const [buscaParticipante, setBuscaParticipante] = useState("");
   const [statusJogo, setStatusJogo] = useState("todos");
   const [filtroPontuacao, setFiltroPontuacao] = useState<FiltroPontuacao>("todos");
 
@@ -80,6 +82,15 @@ export function MeuPerfil() {
       return bateBusca && bateStatus && batePontuacao;
     });
   }, [buscaPalpite, filtroPontuacao, jogosComPalpite, statusJogo]);
+
+  const participantesFiltrados = useMemo(() => {
+    if (!data) return [];
+
+    const termo = normalizarTexto(buscaParticipante);
+    return [...data.dashboard.participantes]
+      .sort((a, b) => a.posicao - b.posicao || a.nome.localeCompare(b.nome, "pt-BR"))
+      .filter((item) => !termo || normalizarTexto(item.nome).includes(termo));
+  }, [buscaParticipante, data]);
 
   if (isLoading) return <LoadingSkeleton rows={8} />;
   if (error || !data) return <ErrorState message={error ?? "Perfil indisponível."} onRetry={refetch} />;
@@ -191,6 +202,74 @@ export function MeuPerfil() {
           </CardBody>
         </Card>
       </section>
+
+      <Card>
+        <CardHeader className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <p className="flex items-center gap-2 text-sm font-black uppercase tracking-wide text-brand-600">
+              <Users className="h-4 w-4" aria-hidden />
+              Participantes
+            </p>
+            <h2 className="mt-1 text-lg font-black text-slate-950">Perfis do bolão</h2>
+            <p className="text-sm text-slate-500">
+              {participantesFiltrados.length} de {dashboard.participantes.length} participantes
+            </p>
+          </div>
+          <label className="relative w-full sm:max-w-xs">
+            <span className="sr-only">Buscar participante</span>
+            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" aria-hidden />
+            <Input
+              className="pl-9"
+              value={buscaParticipante}
+              onChange={(event) => setBuscaParticipante(event.target.value)}
+              placeholder="Buscar participante"
+            />
+          </label>
+        </CardHeader>
+        <CardBody>
+          {participantesFiltrados.length === 0 ? (
+            <EmptyState title="Nenhum participante encontrado" description="Tente buscar por outro nome." />
+          ) : (
+            <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+              {participantesFiltrados.map((item) => (
+                <Link
+                  key={item.nome}
+                  to={`/participantes/${encodeURIComponent(item.nome)}`}
+                  className="group flex min-h-32 flex-col justify-between rounded-lg border border-slate-200 bg-white p-4 transition hover:border-brand-500 hover:bg-brand-50 focus:outline-none focus:ring-4 focus:ring-brand-100"
+                >
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <h3 className="break-words text-base font-black text-slate-950">{item.nome}</h3>
+                      <p className="mt-1 text-sm text-slate-500">{porcentagem(item.aproveitamento)} de aproveitamento</p>
+                    </div>
+                    <Badge className="shrink-0" tone={item.nome === participante.nome ? "blue" : item.posicao <= 3 ? "gold" : "gray"}>
+                      {item.nome === participante.nome ? "Você" : `${item.posicao}º`}
+                    </Badge>
+                  </div>
+                  <div className="mt-4 grid grid-cols-3 gap-2 text-center text-sm">
+                    <div className="rounded-lg bg-slate-100 p-2">
+                      <strong className="block text-slate-950">{item.pontos}</strong>
+                      <span className="text-xs text-slate-500">pts</span>
+                    </div>
+                    <div className="rounded-lg bg-slate-100 p-2">
+                      <strong className="block text-slate-950">{item.cravadas}</strong>
+                      <span className="text-xs text-slate-500">crav.</span>
+                    </div>
+                    <div className="rounded-lg bg-slate-100 p-2">
+                      <strong className="block text-slate-950">{item.palpitesEnviados}</strong>
+                      <span className="text-xs text-slate-500">palp.</span>
+                    </div>
+                  </div>
+                  <span className="mt-4 inline-flex items-center gap-2 text-sm font-bold text-brand-600 group-hover:text-brand-700">
+                    Ver perfil
+                    <ArrowRight className="h-4 w-4" aria-hidden />
+                  </span>
+                </Link>
+              ))}
+            </div>
+          )}
+        </CardBody>
+      </Card>
 
       <section className="grid gap-6 xl:grid-cols-[0.9fr_1.1fr]">
         <Card>
@@ -324,11 +403,15 @@ export function MeuPerfil() {
                   <dl className="mt-4 grid gap-2 text-sm sm:grid-cols-3">
                     <div className="rounded-lg bg-slate-100 p-3">
                       <dt className="text-xs font-semibold text-slate-500">Resultado</dt>
-                      <dd className="mt-1 font-bold text-slate-950">{jogo.resultado ?? "pendente"}</dd>
+                      <dd className="mt-1 font-bold text-slate-950">
+                        {jogo.fase === "mata-mata" ? `${jogo.resultado ?? "pendente"} / ${jogo.classificado ?? "pendente"}` : (jogo.resultado ?? "pendente")}
+                      </dd>
                     </div>
                     <div className="rounded-lg bg-slate-100 p-3">
                       <dt className="text-xs font-semibold text-slate-500">Meu palpite</dt>
-                      <dd className="mt-1 font-bold text-slate-950">{palpite?.palpite ?? "-"}</dd>
+                      <dd className="mt-1 font-bold text-slate-950">
+                        {jogo.fase === "mata-mata" ? `${palpite?.palpite ?? "-"} / ${palpite?.classificado ?? "-"}` : (palpite?.palpite ?? "-")}
+                      </dd>
                     </div>
                     <div className="rounded-lg bg-slate-100 p-3">
                       <dt className="text-xs font-semibold text-slate-500">Status</dt>

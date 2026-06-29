@@ -207,6 +207,7 @@ async function importarPalpitesIndividualmente(payload: ImportarPalpitesEmLotePa
   for (const item of payload.palpites) {
     const jogo = `${item.timeCasa} x ${item.timeFora}`;
     const palpite = `${item.golsCasa}x${item.golsFora}`;
+    const novo = item.classificado ? `${palpite} / ${item.classificado}` : palpite;
 
     if (item.decisao === "ignorar" || item.decisao === "manter") {
       ignorados += 1;
@@ -214,7 +215,7 @@ async function importarPalpitesIndividualmente(payload: ImportarPalpitesEmLotePa
         participante: item.participante,
         jogo,
         status: item.decisao === "manter" ? "mantido" : "ignorado",
-        novo: palpite
+        novo
       });
       continue;
     }
@@ -227,7 +228,8 @@ async function importarPalpitesIndividualmente(payload: ImportarPalpitesEmLotePa
         jogoId: item.jogoId,
         timeCasa: item.timeCasa,
         timeFora: item.timeFora,
-        palpite
+        palpite,
+        classificado: item.classificado || undefined
       });
 
       importados += 1;
@@ -235,7 +237,7 @@ async function importarPalpitesIndividualmente(payload: ImportarPalpitesEmLotePa
         participante: item.participante,
         jogo,
         status: "importado",
-        novo: palpite
+        novo
       });
     } catch (error) {
       const message = `${item.participante} - ${jogo}: ${getErrorMessage(error)}`;
@@ -244,7 +246,7 @@ async function importarPalpitesIndividualmente(payload: ImportarPalpitesEmLotePa
         participante: item.participante,
         jogo,
         status: "erro",
-        novo: palpite,
+        novo,
         erro: message
       });
     }

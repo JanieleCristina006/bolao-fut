@@ -24,9 +24,13 @@ const exemploPlaceholder = `JOGO DIA 15/06 - SEGUNDA - HOJEEE
 
 Meus palpites (Nome do participante)
 
-Espanha 2x1 Cabo Verde
-Bélgica 1 x 0 Egito
-Arábia Saudita 2 a 2 Uruguai`;
+Brasil 3 x 1 Japão (Brasil)
+Alemanha 3 x 0 Paraguai (Alemanha)
+Holanda 0 x 1 Marrocos (Marrocos)`;
+
+function temPalpiteAtual(item: ImportacaoPalpiteItem): boolean {
+  return Boolean(item.palpiteAtual || item.classificadoAtual);
+}
 
 function statusEditado(item: ImportacaoPalpiteItem): StatusImportacaoPalpite {
   if (!item.incluir) return "removido";
@@ -35,7 +39,7 @@ function statusEditado(item: ImportacaoPalpiteItem): StatusImportacaoPalpite {
   if (!item.celulaPlanilha) return "celula-nao-encontrada";
   if (item.golsCasa === null || item.golsFora === null || item.golsCasa < 0 || item.golsFora < 0) return "formato-invalido";
   if (item.duplicado) return "duplicado";
-  if (item.palpiteAtual) return "palpite-existente";
+  if (temPalpiteAtual(item)) return "palpite-existente";
   return "valido";
 }
 
@@ -56,7 +60,7 @@ function revalidarItem(item: ImportacaoPalpiteItem): ImportacaoPalpiteItem {
     erros,
     valido,
     importavel: valido && item.usarNaImportacao,
-    decisao: item.palpiteAtual ? item.decisao : "substituir"
+    decisao: temPalpiteAtual(item) ? item.decisao : "substituir"
   };
 }
 
@@ -75,7 +79,7 @@ function montarResumo(resultado: ResultadoImportacaoPalpites): ResultadoImportac
       invalidos: itens.filter((item) => !item.valido && item.status !== "nao-enviou" && item.status !== "removido").length,
       duplicados: itens.filter((item) => item.duplicado).length,
       naoEnviados: itens.filter((item) => item.status === "nao-enviou").length,
-      comPalpiteExistente: itens.filter((item) => Boolean(item.palpiteAtual)).length
+      comPalpiteExistente: itens.filter(temPalpiteAtual).length
     }
   };
 }
@@ -89,7 +93,7 @@ function itemPodeSerEnviado(item: ImportacaoPalpiteItem): item is ImportacaoPalp
 } {
   if (!item.incluir || !item.importavel || !item.usarNaImportacao) return false;
   if (item.status === "nao-enviou" || item.status === "removido") return false;
-  if (item.palpiteAtual && item.decisao !== "substituir") return false;
+  if (temPalpiteAtual(item) && item.decisao !== "substituir") return false;
   return Boolean(item.participanteOficial && item.jogoId && item.celulaPlanilha && item.golsCasa !== null && item.golsFora !== null);
 }
 
@@ -129,7 +133,8 @@ function aplicarEstrutura(
       ...item,
       celulaPlanilha: alvo.celula,
       cabecalhoPlanilha: alvo.cabecalho,
-      palpiteAtual: alvo.palpiteAtual || item.palpiteAtual
+      palpiteAtual: alvo.palpiteAtual || item.palpiteAtual,
+      classificadoAtual: alvo.classificadoAtual || item.classificadoAtual
     };
   });
 
@@ -159,6 +164,7 @@ export function ImportarPalpitesWhatsApp() {
       celula: item.celulaPlanilha,
       golsCasa: item.golsCasa,
       golsFora: item.golsFora,
+      classificado: item.classificado || null,
       decisao: item.decisao
     }));
   }, [resultado]);
@@ -203,6 +209,12 @@ export function ImportarPalpitesWhatsApp() {
     setImportacaoConcluida(null);
   }
 
+  function limparCamposImportacao() {
+    setTexto("");
+    setResultado(null);
+    setEstrutura(null);
+  }
+
   function atualizarItem(id: string, patch: Partial<ImportacaoPalpiteItem>) {
     setResultado((current) => {
       if (!current) return current;
@@ -215,7 +227,7 @@ export function ImportarPalpitesWhatsApp() {
           celulaPlanilha: alvo?.celula,
           cabecalhoPlanilha: alvo?.cabecalho
         });
-        if (next.palpiteAtual && next.decisao === "ignorar") {
+        if (temPalpiteAtual(next) && next.decisao === "ignorar") {
           return { ...next, incluir: false, status: "removido" as const, valido: false, importavel: false };
         }
         return next;
@@ -250,7 +262,7 @@ export function ImportarPalpitesWhatsApp() {
     const temDuplicados = resultado.itens.some((item) => item.duplicado && item.incluir && item.usarNaImportacao);
     if (temDuplicados && !window.confirm("Há palpites duplicados. Confirmar usando os itens marcados como últimos?")) return;
 
-    const temSubstituicoes = resultado.itens.some((item) => item.palpiteAtual && item.decisao === "substituir" && item.incluir);
+    const temSubstituicoes = resultado.itens.some((item) => temPalpiteAtual(item) && item.decisao === "substituir" && item.incluir);
     if (temSubstituicoes && !window.confirm("Há palpites existentes que serão substituídos. Confirmar importação?")) return;
 
     setIsImporting(true);
@@ -261,10 +273,11 @@ export function ImportarPalpitesWhatsApp() {
         palpites: palpitesParaEnviar
       });
       await refetch();
-      if (resposta.erros.length === 0) {
-        const totalImportado = resposta.importados + resposta.atualizados;
-        showToast(`${totalImportado} palpites importados com sucesso!`);
-        limparTudo();
+      const totalImportado = resposta.importados + resposta.atualizados;
+      if (resposta.erros.length === 0 || totalImportado > 0) {
+        showToast(resposta.erros.length === 0 ? `${totalImportado} palpites importados com sucesso!` : resposta.message);
+        limparCamposImportacao();
+        setImportacaoConcluida(null);
       } else {
         setImportacaoConcluida(resposta);
         showToast(resposta.message);

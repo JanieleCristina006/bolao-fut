@@ -44,6 +44,8 @@ function AuthenticatedArea() {
             <Route path="/me" element={<MeuPerfil />} />
             <Route path="/ranking" element={<Ranking />} />
             <Route path="/jogos" element={<Jogos />} />
+            <Route path="/participantes" element={<Participantes />} />
+            <Route path="/participantes/:nome" element={<ParticipanteDetalhes />} />
             <Route path="/regulamento" element={<Regulamento />} />
             <Route path="*" element={<Navigate to="/me" replace />} />
           </>

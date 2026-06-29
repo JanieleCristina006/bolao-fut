@@ -1,6 +1,10 @@
 export type StatusJogo = "agendado" | "andamento" | "finalizado";
 
-export type PontuacaoTipo = "exato" | "vencedor" | "empate" | "erro" | "pendente";
+export type PontuacaoTipo = "exato" | "vencedor" | "empate" | "classificado" | "erro" | "pendente";
+
+export type FaseJogo = "grupos" | "mata-mata";
+
+export type TipoPontuacaoJogo = "grupos" | "geral" | "especial";
 
 export type PagamentoSituacao = "pago" | "pendente" | "isento";
 
@@ -8,6 +12,9 @@ export interface ResultadoPontuacao {
   pontos: number;
   cravada: boolean;
   tipo: PontuacaoTipo;
+  pontosPlacar?: number;
+  bonusClassificado?: number;
+  classificadoCorreto?: boolean;
 }
 
 export interface Jogo {
@@ -20,6 +27,10 @@ export interface Jogo {
   visitante: string;
   abreviacao: string;
   resultado: string | null;
+  classificado?: string | null;
+  fase?: FaseJogo;
+  tipoPontuacao?: TipoPontuacaoJogo;
+  pontosMaximos?: number;
   status: StatusJogo;
 }
 
@@ -27,6 +38,7 @@ export interface Palpite extends ResultadoPontuacao {
   jogoId: string;
   participante: string;
   palpite: string;
+  classificado?: string | null;
 }
 
 export interface RankingItem {
@@ -96,6 +108,7 @@ export interface AtualizarPagamentoPayload {
 export interface AtualizarResultadoPayload {
   jogoId: string;
   resultado: string;
+  classificado?: string;
   adminToken: string;
 }
 
@@ -103,6 +116,7 @@ export interface AtualizarPalpitePayload {
   participante: string;
   jogoId: string;
   palpite: string;
+  classificado?: string;
   adminToken: string;
 }
 

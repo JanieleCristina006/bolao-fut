@@ -22,9 +22,13 @@ interface LinhaImagem {
 
 export function tomDoPalpite(palpite: Palpite | undefined): "verde" | "azul" | "vermelho" | "neutro" {
   if (palpite?.tipo === "exato") return "verde";
-  if (palpite?.tipo === "vencedor" || palpite?.tipo === "empate") return "azul";
+  if (palpite?.tipo === "vencedor" || palpite?.tipo === "empate" || palpite?.tipo === "classificado") return "azul";
   if (palpite?.tipo === "erro") return "vermelho";
   return "neutro";
+}
+
+function formatarBonus(palpite: Palpite): string {
+  return String(palpite.bonusClassificado ?? 0);
 }
 
 const CANVAS_WIDTH = 1400;
@@ -291,21 +295,44 @@ export function criarTabelaPalpitesDeJogo(jogo: Jogo, palpites: Palpite[]): Tabe
     const diferencaTom = ordemDosTons[tomDoPalpite(a)] - ordemDosTons[tomDoPalpite(b)];
     return diferencaTom || a.participante.localeCompare(b.participante, "pt-BR");
   });
+  const isMataMata = jogo.fase === "mata-mata";
 
   return {
     titulo: `${jogo.mandante} x ${jogo.visitante}`,
-    colunas: [
-      { titulo: "Participante", largura: 0.4 },
-      { titulo: "Palpite", largura: 0.18 },
-      { titulo: "Pontos", largura: 0.14 },
-      { titulo: "Resultado do jogo", largura: 0.28 }
-    ],
-    linhas: palpitesOrdenados.map((palpite) => [
-      palpite.participante,
-      palpite.palpite || "-",
-      String(palpite.pontos),
-      jogo.resultado ?? "pendente"
-    ]),
+    colunas: isMataMata
+      ? [
+          { titulo: "Participante", largura: 0.27 },
+          { titulo: "Palpite 90m", largura: 0.13 },
+          { titulo: "Classificado", largura: 0.17 },
+          { titulo: "Pontos", largura: 0.1 },
+          { titulo: "Bonus", largura: 0.1 },
+          { titulo: "Resultado", largura: 0.23 }
+        ]
+      : [
+          { titulo: "Participante", largura: 0.35 },
+          { titulo: "Palpite", largura: 0.16 },
+          { titulo: "Pontos", largura: 0.12 },
+          { titulo: "Bonus", largura: 0.1 },
+          { titulo: "Resultado do jogo", largura: 0.27 }
+        ],
+    linhas: palpitesOrdenados.map((palpite) =>
+      isMataMata
+        ? [
+            palpite.participante,
+            palpite.palpite || "-",
+            palpite.classificado || "-",
+            String(palpite.pontos),
+            formatarBonus(palpite),
+            `${jogo.resultado ?? "pendente"} / ${jogo.classificado ?? "pendente"}`
+          ]
+        : [
+            palpite.participante,
+            palpite.palpite || "-",
+            String(palpite.pontos),
+            formatarBonus(palpite),
+            jogo.resultado ?? "pendente"
+          ]
+    ),
     tonsLinhas: palpitesOrdenados.map(tomDoPalpite),
     nomeArquivo: `palpites-${nomeSeguro(jogo.mandante)}-x-${nomeSeguro(jogo.visitante)}`
   };

@@ -28,6 +28,7 @@ function tonePorTipo(tipo: PontuacaoTipo) {
   if (tipo === "exato") return "green";
   if (tipo === "vencedor") return "blue";
   if (tipo === "empate") return "yellow";
+  if (tipo === "classificado") return "yellow";
   if (tipo === "erro") return "red";
   return "gray";
 }
@@ -37,6 +38,7 @@ function rowClass(tipo: PontuacaoTipo) {
     exato: "border-emerald-200 bg-emerald-50 max-lg:border-white/15 max-lg:bg-zinc-100/10",
     vencedor: "border-blue-200 bg-blue-50 max-lg:border-cyan-300/30 max-lg:bg-cyan-300/10",
     empate: "border-amber-200 bg-amber-50 max-lg:border-amber-300/35 max-lg:bg-amber-300/10",
+    classificado: "border-yellow-200 bg-yellow-50 max-lg:border-yellow-300/35 max-lg:bg-yellow-300/10",
     erro: "border-slate-200 bg-slate-50 max-lg:border-white/10 max-lg:bg-white/5",
     pendente: "border-slate-200 bg-slate-100 max-lg:border-white/10 max-lg:bg-white/[0.08]"
   }[tipo];
@@ -103,6 +105,12 @@ export function JogoCard({
           </h2>
           <p className="text-sm text-slate-500 max-lg:text-zinc-100/65">
             {jogo.abreviacao} · Resultado: <strong className="text-slate-900 max-lg:text-zinc-100">{jogo.resultado ?? "pendente"}</strong>
+            {jogo.fase === "mata-mata" ? (
+              <>
+                {" "}
+                · Classificado: <strong className="text-slate-900 max-lg:text-zinc-100">{jogo.classificado ?? "pendente"}</strong>
+              </>
+            ) : null}
           </p>
         </div>
         <div className="grid gap-2 sm:flex sm:flex-wrap lg:justify-end">
@@ -208,8 +216,14 @@ export function JogoCard({
                   <Badge className="shrink-0" tone={tonePorTipo(palpite.tipo)}>{palpite.pontos} pts</Badge>
                 </div>
                 <p className="mt-1 text-sm text-slate-700 max-lg:text-zinc-100/80">
-                  Palpite: <strong>{palpite.palpite}</strong>
+                  Palpite 90m: <strong>{palpite.palpite || "-"}</strong>
                 </p>
+                {jogo.fase === "mata-mata" ? (
+                  <p className="text-sm text-slate-700 max-lg:text-zinc-100/80">
+                    Classificado: <strong>{palpite.classificado || "-"}</strong>
+                    {palpite.bonusClassificado ? <span className="font-semibold"> (+{palpite.bonusClassificado})</span> : null}
+                  </p>
+                ) : null}
                 <p className="text-xs font-semibold text-slate-500 max-lg:text-zinc-100/60">{PONTUACAO_LABELS[palpite.tipo]}</p>
               </div>
             ))}

@@ -107,11 +107,17 @@ export function ParticipanteDetalhes() {
                 <dl className="grid grid-cols-2 gap-2 text-sm">
                   <div className="rounded-lg bg-slate-100 p-3">
                     <dt className="text-xs font-semibold text-slate-500">Resultado</dt>
-                    <dd className="mt-1 font-bold text-slate-950">{jogo.resultado ?? "pendente"}</dd>
+                    <dd className="mt-1 font-bold text-slate-950">
+                      {jogo.fase === "mata-mata" ? `${jogo.resultado ?? "pendente"} / ${jogo.classificado ?? "pendente"}` : (jogo.resultado ?? "pendente")}
+                    </dd>
                   </div>
                   <div className="rounded-lg bg-slate-100 p-3">
                     <dt className="text-xs font-semibold text-slate-500">Palpite</dt>
-                    <dd className="mt-1 font-bold text-slate-950">{palpite?.palpite ?? "-"}</dd>
+                    <dd className="mt-1 font-bold text-slate-950">
+                      {jogo.fase === "mata-mata"
+                        ? `${palpite?.palpite ?? "-"} / ${palpite?.classificado ?? "-"}`
+                        : (palpite?.palpite ?? "-")}
+                    </dd>
                   </div>
                 </dl>
               </article>
@@ -139,8 +145,12 @@ export function ParticipanteDetalhes() {
                     <td className="px-4 py-3">
                       {formatarData(jogo.data)} {jogo.horario}
                     </td>
-                    <td className="px-4 py-3">{jogo.resultado ?? "pendente"}</td>
-                    <td className="px-4 py-3">{palpite?.palpite ?? "-"}</td>
+                    <td className="px-4 py-3">
+                      {jogo.fase === "mata-mata" ? `${jogo.resultado ?? "pendente"} / ${jogo.classificado ?? "pendente"}` : (jogo.resultado ?? "pendente")}
+                    </td>
+                    <td className="px-4 py-3">
+                      {jogo.fase === "mata-mata" ? `${palpite?.palpite ?? "-"} / ${palpite?.classificado ?? "-"}` : (palpite?.palpite ?? "-")}
+                    </td>
                     <td className="px-4 py-3">
                       <Badge tone={palpite && palpite.pontos > 0 ? "green" : "gray"}>{palpite?.pontos ?? 0} pts</Badge>
                     </td>

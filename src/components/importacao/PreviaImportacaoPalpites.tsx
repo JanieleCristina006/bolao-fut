@@ -47,6 +47,10 @@ function rowClass(item: ImportacaoPalpiteItem): string {
   return "";
 }
 
+function temPalpiteAtual(item: ImportacaoPalpiteItem): boolean {
+  return Boolean(item.palpiteAtual || item.classificadoAtual);
+}
+
 export function PreviaImportacaoPalpites({
   resultado,
   participantes,
@@ -95,7 +99,7 @@ export function PreviaImportacaoPalpites({
       </CardHeader>
       <CardBody className="space-y-4">
         <div className="overflow-x-auto">
-          <table className="min-w-[980px] w-full border-separate border-spacing-y-2 text-left text-sm">
+          <table className="min-w-[1080px] w-full border-separate border-spacing-y-2 text-left text-sm">
             <thead className="text-xs uppercase tracking-wide text-slate-500">
               <tr>
                 <th className="px-3 py-2">Participante</th>
@@ -174,30 +178,39 @@ export function PreviaImportacaoPalpites({
                       {item.status === "nao-enviou" ? (
                         <span className="font-bold text-slate-500">—</span>
                       ) : (
-                        <div className="grid grid-cols-[4.5rem_4.5rem] gap-2">
+                        <div className="space-y-2">
+                          <div className="grid grid-cols-[4.5rem_4.5rem] gap-2">
+                            <Input
+                              type="number"
+                              min={0}
+                              max={99}
+                              value={item.golsCasa ?? ""}
+                              disabled={isDisabled}
+                              aria-label="Gols do mandante"
+                              onChange={(event) => alterarPlacar(item, "golsCasa", event.target.value)}
+                            />
+                            <Input
+                              type="number"
+                              min={0}
+                              max={99}
+                              value={item.golsFora ?? ""}
+                              disabled={isDisabled}
+                              aria-label="Gols do visitante"
+                              onChange={(event) => alterarPlacar(item, "golsFora", event.target.value)}
+                            />
+                          </div>
                           <Input
-                            type="number"
-                            min={0}
-                            max={99}
-                            value={item.golsCasa ?? ""}
+                            value={item.classificado ?? ""}
                             disabled={isDisabled}
-                            aria-label="Gols do mandante"
-                            onChange={(event) => alterarPlacar(item, "golsCasa", event.target.value)}
-                          />
-                          <Input
-                            type="number"
-                            min={0}
-                            max={99}
-                            value={item.golsFora ?? ""}
-                            disabled={isDisabled}
-                            aria-label="Gols do visitante"
-                            onChange={(event) => alterarPlacar(item, "golsFora", event.target.value)}
+                            aria-label="Classificado"
+                            placeholder="Classificado"
+                            onChange={(event) => onItemChange(item.id, { classificado: event.target.value })}
                           />
                         </div>
                       )}
-                      {item.palpiteAtual ? (
+                      {temPalpiteAtual(item) ? (
                         <p className="mt-1 text-xs font-semibold text-blue-700">
-                          Atual: {item.palpiteAtual} → Novo: {item.placar || "-"}
+                          Atual: {item.palpiteAtual || "-"} / {item.classificadoAtual || "-"} → Novo: {item.placar || "-"} / {item.classificado || "-"}
                         </p>
                       ) : null}
                     </td>
@@ -219,7 +232,7 @@ export function PreviaImportacaoPalpites({
                     <td className="border-y border-slate-200 px-3 py-3">
                       {item.status === "nao-enviou" ? (
                         <span className="text-xs font-semibold text-slate-500">Não altera a planilha</span>
-                      ) : item.palpiteAtual ? (
+                      ) : temPalpiteAtual(item) ? (
                         <Select
                           value={item.decisao}
                           disabled={!item.incluir}

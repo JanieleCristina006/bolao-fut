@@ -5,9 +5,11 @@ import { Card, CardBody, CardHeader } from "../components/ui/Card";
 import { formatarMoeda } from "../utils/formatadores";
 
 const regras = [
-  "Placar exato vale 5 pontos",
-  "Vencedor correto vale 2 pontos",
-  "Empate correto com placar diferente vale 2 pontos",
+  "Fase de grupos: placar exato vale 5 pontos",
+  "Fase de grupos: vencedor ou empate correto vale 2 pontos",
+  "Mata-mata geral: placar exato vale 20 pontos e vencedor/empate vale 10 pontos",
+  "Jogos do Brasil, semifinais e final: placar exato vale 25 pontos e vencedor/empate vale 15 pontos",
+  "Mata-mata: classificado correto soma bônus de 5 pontos",
   "Palpite errado vale 0 pontos",
   "O ranking desempata pela quantidade de placares cravados",
   `Valor do bolão: ${formatarMoeda(PIX_INFO.valor)}`,
@@ -15,9 +17,10 @@ const regras = [
 ];
 
 const legenda = [
-  { tipo: "exato", tone: "green", pontos: "5 pontos" },
-  { tipo: "vencedor", tone: "blue", pontos: "2 pontos" },
-  { tipo: "empate", tone: "yellow", pontos: "2 pontos" },
+  { tipo: "exato", tone: "green", pontos: "5, 20 ou 25 pontos" },
+  { tipo: "vencedor", tone: "blue", pontos: "2, 10 ou 15 pontos" },
+  { tipo: "empate", tone: "yellow", pontos: "2, 10 ou 15 pontos" },
+  { tipo: "classificado", tone: "yellow", pontos: "+5 pontos" },
   { tipo: "erro", tone: "red", pontos: "0 pontos" },
   { tipo: "pendente", tone: "gray", pontos: "sem resultado" }
 ] as const;

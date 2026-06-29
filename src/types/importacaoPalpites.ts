@@ -27,6 +27,7 @@ export interface ImportacaoPalpiteItem {
   golsCasa: number | null;
   golsFora: number | null;
   placar: string;
+  classificado?: string | null;
   jogoId?: string;
   jogoTexto: string;
   mandanteOficial?: string;
@@ -40,6 +41,7 @@ export interface ImportacaoPalpiteItem {
   usarNaImportacao: boolean;
   duplicado: boolean;
   palpiteAtual?: string | null;
+  classificadoAtual?: string | null;
   decisao: DecisaoImportacaoPalpite;
   avisos: string[];
   erros: string[];
@@ -84,6 +86,7 @@ export interface ImportarPalpiteEmLoteItem {
   celula?: string;
   golsCasa: number;
   golsFora: number;
+  classificado?: string | null;
   decisao: DecisaoImportacaoPalpite;
 }
 
@@ -98,6 +101,7 @@ export interface AlvoImportacaoPalpite {
   cabecalho: string;
   celula: string;
   palpiteAtual: string;
+  classificadoAtual?: string;
 }
 
 export interface EstruturaImportacaoPalpites {

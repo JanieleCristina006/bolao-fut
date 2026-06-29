@@ -25,8 +25,17 @@ interface GameBlock {
   day: ParsedDay;
 }
 
+interface MataMataGameColumn {
+  palpiteCol: number;
+  classificadoCol: number;
+  pontosCol: number;
+  titulo: string;
+  tipo: "geral" | "especial";
+}
+
 const SHEETS = {
   palpites: ["bolão - palpites", "bolão palpites", "palpites"],
+  mataMata: ["mata-mata", "mata mata", "matamata"],
   pagamento: ["bolão - pagamento", "bolão pagamento", "pagamento", "pagamentos"],
   ranking: ["ranking"]
 };
@@ -149,6 +158,48 @@ function splitGame(abreviacao: string): { mandante: string; visitante: string } 
   return {
     mandante: TEAM_NAMES[home] ?? homeRaw,
     visitante: TEAM_NAMES[away] ?? awayRaw
+  };
+}
+
+function teamCode(nome: string): string {
+  const normalized = normalizarTexto(nome).replace(/\s+/g, " ");
+  const directCode = Object.entries(TEAM_NAMES).find(([code]) => normalizarTexto(code) === normalized);
+  if (directCode) return directCode[0];
+  const byName = Object.entries(TEAM_NAMES).find(([, fullName]) => normalizarTexto(fullName).replace(/\s+/g, " ") === normalized);
+  return byName?.[0] ?? nome;
+}
+
+function normalizeTeamName(nome: string): string {
+  const code = teamCode(nome).toUpperCase();
+  return TEAM_NAMES[code] ?? nome.trim();
+}
+
+function parseMataMataTitle(value: string): {
+  label: string;
+  date: string;
+  horario: string;
+  mandante: string;
+  visitante: string;
+  abreviacao: string;
+} {
+  const title = value.replace(/\s+/g, " ").trim();
+  const match = title.match(/^(?:(\d{1,2})\/(\d{1,2})\s+(\d{1,2})h(?:(\d{2}))?\s*[\u2013\u2014-]\s*)?(.+)$/i);
+  const confronto = match?.[5]?.trim() || title;
+  const teams = confronto.match(/^(.+?)\s+x\s+(.+)$/i);
+  const homeRaw = teams?.[1]?.trim() || confronto;
+  const awayRaw = teams?.[2]?.trim() || "A definir";
+  const mandante = normalizeTeamName(homeRaw);
+  const visitante = normalizeTeamName(awayRaw);
+  const homeCode = teamCode(homeRaw);
+  const awayCode = teams ? teamCode(awayRaw) : "A definir";
+
+  return {
+    label: confronto,
+    date: match?.[1] && match?.[2] ? `${DEFAULT_YEAR}-${match[2].padStart(2, "0")}-${match[1].padStart(2, "0")}` : "",
+    horario: match?.[3] ? `${match[3].padStart(2, "0")}:${(match[4] ?? "00").padStart(2, "0")}` : "",
+    mandante,
+    visitante,
+    abreviacao: teams ? `${homeCode} x ${awayCode}` : confronto
   };
 }
 
@@ -373,6 +424,10 @@ function parseJogosEPalpites(sheet: ExcelSheet | null, rankingNames: string[]): 
         visitante: teams.visitante,
         abreviacao,
         resultado,
+        classificado: null,
+        fase: "grupos",
+        tipoPontuacao: "grupos",
+        pontosMaximos: 5,
         status: resultado ? "finalizado" : "agendado"
       });
 
@@ -400,8 +455,139 @@ function parseJogosEPalpites(sheet: ExcelSheet | null, rankingNames: string[]): 
   return { jogos: Array.from(uniqueGames.values()), palpites };
 }
 
+function findMataMataHeader(rows: ExcelCell[][]): number {
+  return rows.findIndex((row) => {
+    const headers = row.map((cell) => normalizarTexto(text(cell)));
+    return (
+      headers.includes("participante") &&
+      headers.some((header) => header.includes("saldo grupos")) &&
+      headers.some((header) => header.includes("palpite 90m")) &&
+      headers.some((header) => header.includes("classificado"))
+    );
+  });
+}
+
+function findMataMataGameColumns(rows: ExcelCell[][], headerRow: number): MataMataGameColumn[] {
+  const header = rows[headerRow] ?? [];
+  const gameTitleRow = rows[Math.max(0, headerRow - 2)] ?? [];
+  const typeRow = rows[Math.max(0, headerRow - 1)] ?? [];
+  const games: MataMataGameColumn[] = [];
+
+  for (let col = 0; col < header.length; col += 1) {
+    const current = normalizarTexto(text(header[col]));
+    const next = normalizarTexto(text(header[col + 1]));
+    if (!current.includes("palpite") || !next.includes("classificado")) continue;
+
+    const titulo = text(gameTitleRow[col]);
+    if (!titulo) continue;
+
+    const typeText = normalizarTexto(text(typeRow[col]));
+    games.push({
+      palpiteCol: col,
+      classificadoCol: col + 1,
+      pontosCol: col + 2,
+      titulo,
+      tipo: typeText.includes("especial") ? "especial" : "geral"
+    });
+  }
+
+  return games;
+}
+
+function findMataMataMarkerRow(rows: ExcelCell[][], participantCol: number, marker: string, startRow: number): number {
+  const wanted = normalizarTexto(marker);
+  for (let row = startRow; row < rows.length; row += 1) {
+    if (normalizarTexto(text(rows[row]?.[participantCol] ?? null)).includes(wanted)) return row;
+  }
+  return -1;
+}
+
+function isBrasilGame(mandante: string, visitante: string): boolean {
+  return [mandante, visitante].some((team) => normalizarTexto(team) === "brasil");
+}
+
+function parseMataMata(sheet: ExcelSheet | null, rankingNames: string[]): { jogos: Jogo[]; palpites: Palpite[] } {
+  if (!sheet) return { jogos: [], palpites: [] };
+
+  const headerRow = findMataMataHeader(sheet.data);
+  if (headerRow < 0) return { jogos: [], palpites: [] };
+
+  const header = sheet.data[headerRow] ?? [];
+  const participantCol = header.findIndex((cell) => normalizarTexto(text(cell)) === "participante");
+  if (participantCol < 0) return { jogos: [], palpites: [] };
+
+  const resultRow = findMataMataMarkerRow(sheet.data, participantCol, "resultado oficial", headerRow + 1);
+  const classifiedRow = findMataMataMarkerRow(sheet.data, participantCol, "classificado oficial", headerRow + 1);
+  const stopRow = resultRow > headerRow ? resultRow : sheet.data.length;
+  const gameColumns = findMataMataGameColumns(sheet.data, headerRow);
+  const jogos: Jogo[] = [];
+  const palpites: Palpite[] = [];
+
+  gameColumns.forEach((game, index) => {
+    const info = parseMataMataTitle(game.titulo);
+    const classificadoOficial = classifiedRow >= 0 ? text(sheet.data[classifiedRow]?.[game.classificadoCol] ?? null) : "";
+    const resultado = resultRow >= 0 ? parseScore(sheet.data[resultRow]?.[game.palpiteCol] ?? null) : null;
+    const isSpecial = game.tipo === "especial" || isBrasilGame(info.mandante, info.visitante);
+    const id = slug(`mata-mata-${info.date || index + 1}-${info.abreviacao}-${game.palpiteCol}`);
+
+    jogos.push({
+      id,
+      dia: info.date ? `Mata-mata ${info.date.slice(5).split("-").reverse().join("/")}` : "Mata-mata",
+      rodada: info.label,
+      data: info.date,
+      horario: info.horario,
+      mandante: info.mandante,
+      visitante: info.visitante,
+      abreviacao: info.abreviacao,
+      resultado,
+      classificado: classificadoOficial || null,
+      fase: "mata-mata",
+      tipoPontuacao: isSpecial ? "especial" : "geral",
+      pontosMaximos: isSpecial ? 30 : 25,
+      status: resultado ? "finalizado" : "agendado"
+    });
+
+    for (let rowIndex = headerRow + 1; rowIndex < stopRow; rowIndex += 1) {
+      const row = sheet.data[rowIndex] ?? [];
+      const rawParticipant = text(row[participantCol]);
+      if (!isParticipantName(rawParticipant)) continue;
+
+      const palpite = parseScore(row[game.palpiteCol] ?? null) ?? "";
+      const classificado = text(row[game.classificadoCol] ?? null);
+      if (!palpite && !classificado) continue;
+
+      const participante = resolveParticipantName(rawParticipant, rankingNames);
+      const pontuacao = calcularPontuacao(palpite, resultado, {
+        fase: "mata-mata",
+        especial: isSpecial,
+        classificadoPalpite: classificado,
+        classificadoOficial
+      });
+
+      palpites.push({
+        jogoId: id,
+        participante,
+        palpite,
+        classificado: classificado || null,
+        ...pontuacao
+      });
+    }
+  });
+
+  return { jogos, palpites };
+}
+
+function maxPontosFinalizados(jogos: Jogo[]): number {
+  return Math.max(
+    1,
+    jogos
+      .filter((jogo) => jogo.resultado)
+      .reduce((total, jogo) => total + (jogo.pontosMaximos ?? (jogo.fase === "mata-mata" ? (jogo.tipoPontuacao === "especial" ? 30 : 25) : 5)), 0)
+  );
+}
+
 function completeRanking(ranking: RankingItem[], palpites: Palpite[], jogos: Jogo[]): RankingItem[] {
-  const finalizedGames = Math.max(1, jogos.filter((jogo) => jogo.resultado).length);
+  const maxPontos = maxPontosFinalizados(jogos);
   const byParticipant = new Map<string, Palpite[]>();
   palpites.forEach((palpite) => {
     const key = normalizarTexto(palpite.participante);
@@ -416,7 +602,7 @@ function completeRanking(ranking: RankingItem[], palpites: Palpite[], jogos: Jog
         ...item,
         palpites: participantBets.length,
         acertos,
-        aproveitamento: (item.pontos / (finalizedGames * 5)) * 100
+        aproveitamento: (item.pontos / maxPontos) * 100
       };
     });
   }
@@ -434,7 +620,7 @@ function completeRanking(ranking: RankingItem[], palpites: Palpite[], jogos: Jog
         cravadas,
         palpites: participantBets.length,
         acertos: participantBets.filter((palpite) => palpite.pontos > 0).length,
-        aproveitamento: (pontos / (finalizedGames * 5)) * 100,
+        aproveitamento: (pontos / maxPontos) * 100,
         ordemOriginal: index
       };
     })
@@ -488,12 +674,19 @@ function buildDashboardFromSheets(sheets: ExcelSheet[]): DashboardData {
   const rankingSheet = findSheet(sheets, SHEETS.ranking);
   const pagamentoSheet = findSheet(sheets, SHEETS.pagamento);
   const palpitesSheet = findSheet(sheets, SHEETS.palpites);
+  const mataMataSheet = findSheet(sheets, SHEETS.mataMata);
 
   const rankingBase = parseRanking(rankingSheet);
   const rankingNames = rankingBase.map((item) => item.participante);
   const pagamentos = parsePagamentos(pagamentoSheet);
-  const { jogos, palpites } = parseJogosEPalpites(palpitesSheet, rankingNames);
-  const ranking = completeRanking(rankingBase, palpites, jogos);
+  const grupos = parseJogosEPalpites(palpitesSheet, rankingNames);
+  const mataMata = parseMataMata(mataMataSheet, rankingNames);
+  const jogos = [...grupos.jogos, ...mataMata.jogos];
+  const palpites = [...grupos.palpites, ...mataMata.palpites];
+  const rankingCalculado = completeRanking([], palpites, jogos);
+  const ranking = rankingBase.some((item) => item.pontos > 0)
+    ? completeRanking(rankingBase, palpites, jogos)
+    : rankingCalculado;
   const participantes = buildParticipantes(ranking, pagamentos);
   const pagos = pagamentos.filter((pagamento) => pagamento.pago);
   const pendentes = pagamentos.filter((pagamento) => !pagamento.pago);

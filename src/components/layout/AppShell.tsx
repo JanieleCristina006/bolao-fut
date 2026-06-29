@@ -20,6 +20,7 @@ const participantNavItems = [
   { to: "/me", label: "Meu perfil", mobileLabel: "Perfil", icon: UserRound },
   { to: "/ranking", label: "Ranking", mobileLabel: "Ranking", icon: Trophy },
   { to: "/jogos", label: "Jogos", mobileLabel: "Jogos", icon: ListChecks },
+  { to: "/participantes", label: "Participantes", mobileLabel: "Pessoas", icon: Users },
   { to: "/regulamento", label: "Regulamento", mobileLabel: "Regras", icon: FileText }
 ];
 
@@ -28,14 +29,14 @@ export function AppShell({ children }: { children: ReactNode }) {
   const isParticipant = session?.role === "participant";
   const navItems = isParticipant ? participantNavItems : adminNavItems;
   const homeTo = isParticipant ? "/me" : "/";
-  const mobileGridClass = isParticipant ? "grid-cols-4" : "grid-cols-7";
+  const mobileGridClass = isParticipant ? "grid-cols-5" : "grid-cols-7";
   const accessLabel = session?.role === "admin" ? "Admin" : session?.participanteNome ?? "Participante";
   const AccessIcon = session?.role === "admin" ? ShieldCheck : UserRound;
 
   return (
-    <div className="flex min-h-screen flex-col bg-slate-100 max-lg:bg-[#121212]">
-      <header className="pwa-safe-top sticky top-0 z-30 border-b border-slate-800 bg-slate-950 text-white no-print max-lg:border-white/10 max-lg:bg-[#121212]/95 max-lg:backdrop-blur-xl">
-        <div className="mx-auto flex max-w-7xl items-center justify-between gap-3 px-3 py-3 sm:px-4 sm:py-4 max-lg:px-4">
+    <div className="flex min-h-screen flex-col bg-slate-100 max-lg:bg-[#0f766e]">
+      <header className="pwa-safe-top sticky top-0 z-30 border-b border-slate-800 bg-slate-950 text-white no-print max-lg:border-white/10 max-lg:bg-[#0f766e]/95 max-lg:backdrop-blur-xl">
+        <div className="mx-auto flex max-w-screen-2xl items-center justify-between gap-3 px-3 py-3 sm:px-4 sm:py-4 max-lg:px-4">
           <NavLink to={homeTo} className="flex min-w-0 items-center gap-2 sm:gap-3">
             <img src="/logo.jpg" alt="Futebol Inglês Brasil" className="h-10 w-10 shrink-0 rounded-lg object-cover shadow-lg ring-1 ring-white/10 sm:h-12 sm:w-12 max-lg:rounded-full max-lg:ring-white/20" />
             <div className="min-w-0">
@@ -78,10 +79,10 @@ export function AppShell({ children }: { children: ReactNode }) {
         </div>
       </header>
 
-      <main className="mx-auto w-full max-w-7xl flex-1 px-3 pb-8 pt-4 sm:px-4 sm:pt-8 max-lg:px-4 max-lg:pb-28 max-lg:pt-4">{children}</main>
+      <main className="mx-auto w-full max-w-screen-2xl flex-1 px-3 pb-8 pt-4 sm:px-4 sm:pt-8 max-lg:px-4 max-lg:pb-28 max-lg:pt-4">{children}</main>
 
       <footer className="hidden border-t border-slate-800 bg-slate-950 pb-24 text-slate-300 no-print lg:block lg:pb-0">
-        <div className="mx-auto max-w-7xl px-4 py-6 sm:py-8">
+        <div className="mx-auto max-w-screen-2xl px-4 py-6 sm:py-8">
           <div className="flex flex-col gap-6 sm:flex-row sm:items-center sm:justify-between">
             <Link to={homeTo} className="flex items-center gap-3">
               <img src="/logo.jpg" alt="" className="h-12 w-12 rounded-lg object-cover ring-1 ring-white/10" />
@@ -108,7 +109,7 @@ export function AppShell({ children }: { children: ReactNode }) {
       </footer>
 
       <nav
-        className="pwa-safe-bottom fixed bottom-0 left-0 right-0 z-30 border-t border-white/10 bg-[#121212]/95 px-3 py-3 shadow-[0_-18px_44px_rgba(0,0,0,0.4)] backdrop-blur-xl lg:hidden no-print"
+        className="pwa-safe-bottom fixed bottom-0 left-0 right-0 z-30 border-t border-white/10 bg-[#0f766e]/95 px-3 py-3 shadow-[0_-18px_44px_rgba(15,118,110,0.32)] backdrop-blur-xl lg:hidden no-print"
         aria-label="Navegação mobile"
       >
         <div className={cn("grid gap-1", mobileGridClass)}>
@@ -119,7 +120,7 @@ export function AppShell({ children }: { children: ReactNode }) {
               className={({ isActive }) =>
                 cn(
                   "flex min-h-14 min-w-0 flex-col items-center justify-center gap-1 rounded-2xl px-0.5 text-[9px] font-bold leading-none transition min-[360px]:text-[10px]",
-                  isActive ? "bg-zinc-100 text-[#121212] shadow-[0_10px_28px_rgba(0,0,0,0.32)]" : "text-zinc-100/65 hover:bg-white/10 hover:text-white"
+                  isActive ? "bg-white text-[#0f766e] shadow-[0_10px_28px_rgba(15,118,110,0.32)]" : "text-white/75 hover:bg-white/10 hover:text-white"
                 )
               }
               aria-label={item.label}
