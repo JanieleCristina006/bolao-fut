@@ -1,15 +1,20 @@
 import { Link } from "react-router-dom";
-import { ArrowRight, CheckCircle2, Clock, ShieldCheck } from "lucide-react";
+import { ArrowRight, CheckCircle2, Clock, ShieldCheck, Trash2 } from "lucide-react";
 import type { Participante } from "../../types";
 import { porcentagem } from "../../utils/formatadores";
 import { Badge } from "../ui/Badge";
+import { Button } from "../ui/Button";
 import { Card, CardBody } from "../ui/Card";
+import { Spinner } from "../ui/Spinner";
 
 interface ParticipanteCardProps {
   participante: Participante;
+  canRemove?: boolean;
+  isRemoving?: boolean;
+  onRemove?: (participante: Participante) => void;
 }
 
-export function ParticipanteCard({ participante }: ParticipanteCardProps) {
+export function ParticipanteCard({ participante, canRemove = false, isRemoving = false, onRemove }: ParticipanteCardProps) {
   const pagamentoTone = participante.pagamento === "pago" ? "green" : participante.pagamento === "isento" ? "blue" : "yellow";
   const pagamentoIcon =
     participante.pagamento === "pago" ? (
@@ -48,13 +53,26 @@ export function ParticipanteCard({ participante }: ParticipanteCardProps) {
             <span className="text-xs text-slate-500">palpites</span>
           </div>
         </div>
-        <Link
-          to={`/participantes/${encodeURIComponent(participante.nome)}`}
-          className="inline-flex min-h-10 w-full items-center justify-center gap-2 rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-900 transition hover:bg-slate-50 focus:outline-none focus:ring-4 focus:ring-slate-200"
-        >
-          Ver detalhes
-          <ArrowRight className="h-4 w-4" aria-hidden />
-        </Link>
+        <div className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_auto]">
+          <Link
+            to={`/participantes/${encodeURIComponent(participante.nome)}`}
+            className="inline-flex min-h-10 w-full items-center justify-center gap-2 rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-900 transition hover:bg-slate-50 focus:outline-none focus:ring-4 focus:ring-slate-200"
+          >
+            Ver detalhes
+            <ArrowRight className="h-4 w-4" aria-hidden />
+          </Link>
+          {canRemove ? (
+            <Button
+              variant="danger"
+              className="w-full sm:w-auto"
+              icon={isRemoving ? <Spinner className="h-4 w-4" label="Removendo" /> : <Trash2 className="h-4 w-4" aria-hidden />}
+              disabled={isRemoving}
+              onClick={() => onRemove?.(participante)}
+            >
+              {isRemoving ? "Removendo..." : "Remover"}
+            </Button>
+          ) : null}
+        </div>
       </CardBody>
     </Card>
   );

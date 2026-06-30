@@ -13,6 +13,8 @@ import type {
   Palpite,
   Participante,
   ParticipanteDetalhe,
+  RemoverParticipantePayload,
+  RemoverParticipanteResponse,
   RankingItem
 } from "../types";
 import type {
@@ -198,6 +200,19 @@ async function adicionarParticipante(payload: AdicionarParticipantePayload): Pro
   }
 }
 
+async function removerParticipante(payload: RemoverParticipantePayload): Promise<RemoverParticipanteResponse> {
+  try {
+    return await post<RemoverParticipanteResponse>({ action: "removerParticipante", ...payload });
+  } catch (error) {
+    if (isInvalidPostActionError(error)) {
+      throw new Error(
+        "O Google Apps Script publicado ainda nao possui a remocao de participantes. Atualize o Code.gs e implante uma Nova versao."
+      );
+    }
+    throw error;
+  }
+}
+
 async function importarPalpitesIndividualmente(payload: ImportarPalpitesEmLotePayload): Promise<ImportarPalpitesEmLoteResponse> {
   const detalhes: ImportarPalpitesEmLoteResponse["detalhes"] = [];
   const erros: string[] = [];
@@ -315,6 +330,7 @@ export const api = {
   atualizarPalpite: (payload: AtualizarPalpitePayload) =>
     post<ApiMessage>({ action: "atualizarPalpite", ...payload }),
   adicionarParticipante,
+  removerParticipante,
   importarPalpitesEmLote: async (payload: ImportarPalpitesEmLotePayload) => {
     try {
       const response = await post<ImportarPalpitesEmLoteResponse>({ action: "importarPalpitesEmLote", ...payload });

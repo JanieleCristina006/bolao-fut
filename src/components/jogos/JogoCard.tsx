@@ -14,9 +14,14 @@ import { Spinner } from "../ui/Spinner";
 type FormatoDownload = "pdf" | "imagem";
 const PALPITES_PAGE_SIZE = 8;
 
+interface ParticipanteDoJogo {
+  nome: string;
+}
+
 interface JogoCardProps {
   jogo: Jogo;
   palpites: Palpite[];
+  participantes?: ParticipanteDoJogo[];
   initiallyOpen?: boolean;
   canEditResult?: boolean;
   isSavingResult?: boolean;
@@ -47,6 +52,7 @@ function rowClass(tipo: PontuacaoTipo) {
 export function JogoCard({
   jogo,
   palpites,
+  participantes = [],
   initiallyOpen = false,
   canEditResult = false,
   isSavingResult = false,
@@ -59,10 +65,38 @@ export function JogoCard({
   const [formatoDownload, setFormatoDownload] = useState<FormatoDownload>("pdf");
   const [buscaParticipante, setBuscaParticipante] = useState("");
   const [palpitesPage, setPalpitesPage] = useState(1);
-  const palpitesOrdenados = useMemo(
+  const palpitesParaDownload = useMemo(
     () => [...palpites].sort((a, b) => a.participante.localeCompare(b.participante, "pt-BR")),
     [palpites]
   );
+  const palpitesOrdenados = useMemo(() => {
+    const porParticipante = new Map(palpites.map((palpite) => [normalizarTexto(palpite.participante), palpite]));
+    const usados = new Set<string>();
+    const linhas = participantes.map((participante) => {
+      const key = normalizarTexto(participante.nome);
+      const palpite = porParticipante.get(key);
+      usados.add(key);
+
+      return (
+        palpite ?? {
+          jogoId: jogo.id,
+          participante: participante.nome,
+          palpite: "",
+          classificado: null,
+          pontos: 0,
+          cravada: false,
+          tipo: "pendente" as const
+        }
+      );
+    });
+
+    palpites.forEach((palpite) => {
+      const key = normalizarTexto(palpite.participante);
+      if (!usados.has(key)) linhas.push(palpite);
+    });
+
+    return linhas.sort((a, b) => a.participante.localeCompare(b.participante, "pt-BR"));
+  }, [jogo.id, palpites, participantes]);
   const palpitesVisiveis = useMemo(() => {
     const termo = normalizarTexto(buscaParticipante);
     if (!termo) return palpitesOrdenados;
@@ -174,7 +208,7 @@ export function JogoCard({
             <Button
               variant="secondary"
               icon={<Download className="h-4 w-4" aria-hidden />}
-              onClick={() => onDownload(jogo, palpitesOrdenados, formatoDownload)}
+              onClick={() => onDownload(jogo, palpitesParaDownload, formatoDownload)}
             >
               Baixar
             </Button>
@@ -204,7 +238,7 @@ export function JogoCard({
               />
             </label>
             <span className="text-sm font-semibold text-slate-500 max-lg:text-zinc-100/70">
-              {palpitesVisiveis.length} de {palpitesOrdenados.length} palpites
+              {palpitesVisiveis.length} de {palpitesOrdenados.length} participantes
             </span>
           </div>
 

@@ -17,7 +17,7 @@ import { api, isAdminWritesEnabled } from "../services/api";
 import { useToast } from "../components/ui/Toast";
 import { filtrarJogos, type FiltrosJogos } from "../utils/filtros";
 import { normalizarTexto } from "../utils/formatadores";
-import { gerarImagemPalpitesDeJogo } from "../utils/gerarImagemPalpites";
+import { gerarImagemPalpitesDeJogo, type ParticipanteImagem } from "../utils/gerarImagemPalpites";
 import { gerarZipImagensPalpitesFiltrados } from "../utils/gerarImagemRelatorios";
 import { gerarPdfPalpitesDeJogo, gerarPdfPalpitesFiltrados } from "../utils/gerarPdfPalpites";
 
@@ -70,8 +70,23 @@ export function Jogos() {
   const selecaoDebounced = useDebounce(filtros.selecao);
   const jogos = data?.jogos ?? [];
   const palpites = data?.palpites ?? [];
+  const participantes = data?.participantes ?? [];
   const dias = Array.from(new Set(jogos.map((jogo) => jogo.dia)));
   const diaAtual = obterDiaAtual(jogos);
+  const participantesDaImagem = useMemo<ParticipanteImagem[]>(() => {
+    const porNome = new Map<string, ParticipanteImagem>();
+
+    participantes.forEach((participante) => {
+      porNome.set(normalizarTexto(participante.nome), { nome: participante.nome });
+    });
+
+    palpites.forEach((palpite) => {
+      const key = normalizarTexto(palpite.participante);
+      if (!porNome.has(key)) porNome.set(key, { nome: palpite.participante });
+    });
+
+    return [...porNome.values()];
+  }, [palpites, participantes]);
 
   const filtrosDebounced = useMemo(
     () => ({ ...filtros, participante: participanteDebounced, jogo: jogoDebounced, selecao: selecaoDebounced }),
@@ -170,14 +185,31 @@ export function Jogos() {
       return bateParticipante && palpiteBateTipo(palpite, filtros.tipo);
     });
     const idsComPalpite = new Set(palpitesDoDownload.map((palpite) => palpite.jogoId));
-    const jogosDoDownload = filtrarJogos(jogos, filtros, (jogo) => idsComPalpite.has(jogo.id));
+    const exigePalpite = filtros.tipo !== "todos";
+    const filtrosDosJogos = exigePalpite ? filtros : { ...filtros, participante: "" };
+    const jogosDoDownload = filtrarJogos(jogos, filtrosDosJogos, (jogo) => idsComPalpite.has(jogo.id));
+    const participantesDoDownload = exigePalpite
+      ? undefined
+      : participantesDaImagem.filter((participante) => !termoParticipante || normalizarTexto(participante.nome).includes(termoParticipante));
 
     return {
-      jogos: filtros.tipo === "todos" && !termoParticipante
+      jogos: filtros.tipo === "todos"
         ? jogosDoDownload
         : jogosDoDownload.filter((jogo) => idsComPalpite.has(jogo.id)),
-      palpites: palpitesDoDownload
+      palpites: palpitesDoDownload,
+      participantes: participantesDoDownload
     };
+  }
+
+  function participantesParaImagem(palpitesDoJogo: Palpite[]): ParticipanteImagem[] {
+    if (filtros.tipo !== "todos") {
+      return participantesDaImagem.filter((participante) =>
+        palpitesDoJogo.some((palpite) => normalizarTexto(palpite.participante) === normalizarTexto(participante.nome))
+      );
+    }
+
+    const termoParticipante = normalizarTexto(filtros.participante);
+    return participantesDaImagem.filter((participante) => !termoParticipante || normalizarTexto(participante.nome).includes(termoParticipante));
   }
 
   function baixarFiltradosEmPdf() {
@@ -188,7 +220,7 @@ export function Jogos() {
   async function baixarFiltradosEmPng() {
     const dados = dadosFiltradosParaDownload();
     try {
-      await gerarZipImagensPalpitesFiltrados(dados.jogos, dados.palpites);
+      await gerarZipImagensPalpitesFiltrados(dados.jogos, dados.palpites, dados.participantes);
     } catch {
       showToast("Não foi possível gerar o ZIP com as imagens.");
     }
@@ -196,7 +228,7 @@ export function Jogos() {
 
   function baixarJogo(jogo: Jogo, itens: Palpite[], formato: FormatoDownload) {
     if (formato === "imagem") {
-      gerarImagemPalpitesDeJogo(jogo, itens);
+      gerarImagemPalpitesDeJogo(jogo, itens, participantesParaImagem(itens));
       return;
     }
     gerarPdfPalpitesDeJogo(jogo, itens);
@@ -285,17 +317,22 @@ export function Jogos() {
         <EmptyState />
       ) : (
         <div className="space-y-4">
-          {paginaAtual.map((jogo) => (
-            <JogoCard
-              key={jogo.id}
-              jogo={jogo}
-              palpites={palpitesFiltrados.filter((palpite) => palpite.jogoId === jogo.id)}
-              canEditResult={canEditResults}
-              isSavingResult={savingResultId === jogo.id}
-              onSaveResult={salvarResultado}
-              onDownload={baixarJogo}
-            />
-          ))}
+          {paginaAtual.map((jogo) => {
+            const palpitesDoJogo = palpitesFiltrados.filter((palpite) => palpite.jogoId === jogo.id);
+
+            return (
+              <JogoCard
+                key={jogo.id}
+                jogo={jogo}
+                palpites={palpitesDoJogo}
+                participantes={participantesParaImagem(palpitesDoJogo)}
+                canEditResult={canEditResults}
+                isSavingResult={savingResultId === jogo.id}
+                onSaveResult={salvarResultado}
+                onDownload={baixarJogo}
+              />
+            );
+          })}
         </div>
       )}
 

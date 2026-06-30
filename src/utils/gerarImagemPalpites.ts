@@ -1,5 +1,8 @@
 import { APP_NAME } from "../constants";
-import type { Jogo, Palpite } from "../types";
+import type { Jogo, Palpite, Participante } from "../types";
+import { normalizarTexto } from "./formatadores";
+
+export type ParticipanteImagem = Pick<Participante, "nome">;
 
 export interface TabelaImagem {
   titulo: string;
@@ -19,6 +22,15 @@ interface LinhaImagem {
   celulas: string[];
   tom?: "verde" | "azul" | "vermelho" | "neutro";
 }
+
+interface LinhaPalpiteImagem {
+  participante: string;
+  palpite?: Palpite;
+  naoEnviou: boolean;
+  tom: "verde" | "azul" | "vermelho" | "neutro";
+}
+
+const NAO_ENVIOU = "-";
 
 export function tomDoPalpite(palpite: Palpite | undefined): "verde" | "azul" | "vermelho" | "neutro" {
   if (palpite?.tipo === "exato") return "verde";
@@ -289,12 +301,43 @@ export function baixarTabelaComoImagem(tabela: TabelaImagem): void {
   void executarDownloadImagem(tabela);
 }
 
-export function criarTabelaPalpitesDeJogo(jogo: Jogo, palpites: Palpite[]): TabelaImagem {
+function criarLinhasPalpitesImagem(palpites: Palpite[], participantes?: ParticipanteImagem[]): LinhaPalpiteImagem[] {
   const ordemDosTons = { verde: 0, azul: 1, vermelho: 2, neutro: 3 } as const;
-  const palpitesOrdenados = [...palpites].sort((a, b) => {
-    const diferencaTom = ordemDosTons[tomDoPalpite(a)] - ordemDosTons[tomDoPalpite(b)];
+  const palpitesPorParticipante = new Map(palpites.map((palpite) => [normalizarTexto(palpite.participante), palpite]));
+  const usados = new Set<string>();
+  const linhas: LinhaPalpiteImagem[] = [];
+
+  participantes?.forEach((participante) => {
+    const key = normalizarTexto(participante.nome);
+    const palpite = palpitesPorParticipante.get(key);
+    usados.add(key);
+    linhas.push({
+      participante: participante.nome,
+      palpite,
+      naoEnviou: !palpite,
+      tom: tomDoPalpite(palpite)
+    });
+  });
+
+  palpites.forEach((palpite) => {
+    const key = normalizarTexto(palpite.participante);
+    if (usados.has(key)) return;
+    linhas.push({
+      participante: palpite.participante,
+      palpite,
+      naoEnviou: false,
+      tom: tomDoPalpite(palpite)
+    });
+  });
+
+  return linhas.sort((a, b) => {
+    const diferencaTom = ordemDosTons[a.tom] - ordemDosTons[b.tom];
     return diferencaTom || a.participante.localeCompare(b.participante, "pt-BR");
   });
+}
+
+export function criarTabelaPalpitesDeJogo(jogo: Jogo, palpites: Palpite[], participantes?: ParticipanteImagem[]): TabelaImagem {
+  const linhasPalpites = criarLinhasPalpitesImagem(palpites, participantes);
   const isMataMata = jogo.fase === "mata-mata";
 
   return {
@@ -315,29 +358,29 @@ export function criarTabelaPalpitesDeJogo(jogo: Jogo, palpites: Palpite[]): Tabe
           { titulo: "Bonus", largura: 0.1 },
           { titulo: "Resultado do jogo", largura: 0.27 }
         ],
-    linhas: palpitesOrdenados.map((palpite) =>
+    linhas: linhasPalpites.map((linha) =>
       isMataMata
         ? [
-            palpite.participante,
-            palpite.palpite || "-",
-            palpite.classificado || "-",
-            String(palpite.pontos),
-            formatarBonus(palpite),
+            linha.participante,
+            linha.naoEnviou ? NAO_ENVIOU : (linha.palpite?.palpite || "-"),
+            linha.naoEnviou ? NAO_ENVIOU : (linha.palpite?.classificado || "-"),
+            String(linha.palpite?.pontos ?? 0),
+            linha.palpite ? formatarBonus(linha.palpite) : "0",
             `${jogo.resultado ?? "pendente"} / ${jogo.classificado ?? "pendente"}`
           ]
         : [
-            palpite.participante,
-            palpite.palpite || "-",
-            String(palpite.pontos),
-            formatarBonus(palpite),
+            linha.participante,
+            linha.naoEnviou ? NAO_ENVIOU : (linha.palpite?.palpite || "-"),
+            String(linha.palpite?.pontos ?? 0),
+            linha.palpite ? formatarBonus(linha.palpite) : "0",
             jogo.resultado ?? "pendente"
           ]
     ),
-    tonsLinhas: palpitesOrdenados.map(tomDoPalpite),
+    tonsLinhas: linhasPalpites.map((linha) => linha.tom),
     nomeArquivo: `palpites-${nomeSeguro(jogo.mandante)}-x-${nomeSeguro(jogo.visitante)}`
   };
 }
 
-export function gerarImagemPalpitesDeJogo(jogo: Jogo, palpites: Palpite[]): void {
-  baixarTabelaComoImagem(criarTabelaPalpitesDeJogo(jogo, palpites));
+export function gerarImagemPalpitesDeJogo(jogo: Jogo, palpites: Palpite[], participantes?: ParticipanteImagem[]): void {
+  baixarTabelaComoImagem(criarTabelaPalpitesDeJogo(jogo, palpites, participantes));
 }

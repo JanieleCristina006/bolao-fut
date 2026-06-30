@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { RotateCcw } from "lucide-react";
 import { useSearchParams } from "react-router-dom";
+import { useAuth } from "../auth/AuthContext";
 import { ParticipanteCard } from "../components/participantes/ParticipanteCard";
 import { Button } from "../components/ui/Button";
 import { EmptyState } from "../components/ui/EmptyState";
@@ -9,9 +10,11 @@ import { Input } from "../components/ui/Input";
 import { LoadingSkeleton } from "../components/ui/LoadingSkeleton";
 import { Pagination } from "../components/ui/Pagination";
 import { Select } from "../components/ui/Select";
+import { useToast } from "../components/ui/Toast";
 import { PAGE_SIZE } from "../constants";
 import { useDebounce } from "../hooks/useDebounce";
 import { useParticipantes } from "../hooks/useParticipantes";
+import { api, isAdminWritesEnabled } from "../services/api";
 import type { Participante } from "../types";
 import { filtrarParticipantes } from "../utils/filtros";
 
@@ -27,12 +30,17 @@ function ordenarParticipantes(lista: Participante[], sort: ParticipanteSort): Pa
 
 export function Participantes() {
   const { data, isLoading, error, refetch } = useParticipantes();
+  const { session } = useAuth();
+  const { showToast } = useToast();
   const [searchParams, setSearchParams] = useSearchParams();
   const [busca, setBusca] = useState(searchParams.get("busca") ?? "");
   const [pagamento, setPagamento] = useState(searchParams.get("pagamento") ?? "todos");
   const [sort, setSort] = useState<ParticipanteSort>((searchParams.get("sort") as ParticipanteSort) ?? "classificacao");
   const [page, setPage] = useState(Number(searchParams.get("page") ?? "1"));
+  const [removingParticipant, setRemovingParticipant] = useState<string | null>(null);
   const buscaDebounced = useDebounce(busca);
+  const adminToken = session?.role === "admin" ? session.adminToken : "";
+  const canRemoveParticipant = Boolean(adminToken) && isAdminWritesEnabled();
 
   useEffect(() => {
     const params = new URLSearchParams();
@@ -53,6 +61,29 @@ export function Participantes() {
   );
   const totalPages = Math.max(1, Math.ceil(filtrado.length / PAGE_SIZE));
   const paginaAtual = filtrado.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
+
+  useEffect(() => {
+    if (page > totalPages) setPage(totalPages);
+  }, [page, totalPages]);
+
+  async function removerParticipante(participante: Participante) {
+    if (!adminToken) {
+      showToast("Informe o token administrativo.");
+      return;
+    }
+    if (!window.confirm(`Remover ${participante.nome} dos jogos, do Ranking e de Pagamentos?`)) return;
+
+    setRemovingParticipant(participante.nome);
+    try {
+      const resposta = await api.removerParticipante({ nome: participante.nome, adminToken });
+      showToast(resposta.message);
+      await refetch();
+    } catch (err) {
+      showToast(err instanceof Error ? err.message : "Nao foi possivel remover o participante.");
+    } finally {
+      setRemovingParticipant(null);
+    }
+  }
 
   if (isLoading) return <LoadingSkeleton rows={8} />;
   if (error || !data) return <ErrorState message={error ?? "Participantes indisponíveis."} onRetry={refetch} />;
@@ -96,7 +127,13 @@ export function Participantes() {
       ) : (
         <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
           {paginaAtual.map((participante) => (
-            <ParticipanteCard key={participante.nome} participante={participante} />
+            <ParticipanteCard
+              key={participante.nome}
+              participante={participante}
+              canRemove={canRemoveParticipant}
+              isRemoving={removingParticipant === participante.nome}
+              onRemove={(item) => void removerParticipante(item)}
+            />
           ))}
         </div>
       )}

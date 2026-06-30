@@ -133,6 +133,18 @@ export interface AdicionarParticipanteResponse extends ApiMessage {
   pagamentoAdicionado: boolean;
 }
 
+export interface RemoverParticipantePayload {
+  nome: string;
+  adminToken: string;
+}
+
+export interface RemoverParticipanteResponse extends ApiMessage {
+  participante: string;
+  jogosRemovidos: number;
+  rankingRemovido: boolean;
+  pagamentoRemovido: boolean;
+}
+
 export interface ApiMessage {
   ok: boolean;
   message: string;

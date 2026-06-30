@@ -6,6 +6,7 @@ import {
   criarTabelaPalpitesDeJogo,
   gerarArquivosTabelaComoImagem,
   nomeSeguro,
+  type ParticipanteImagem,
   tomDoPalpite
 } from "./gerarImagemPalpites";
 import { baixarBlob, criarArquivoZip } from "./criarZip";
@@ -102,12 +103,12 @@ export function gerarImagemParticipante(participante: ParticipanteDetalhe, jogos
   });
 }
 
-export async function gerarZipImagensPalpitesFiltrados(jogos: Jogo[], palpites: Palpite[]): Promise<void> {
+export async function gerarZipImagensPalpitesFiltrados(jogos: Jogo[], palpites: Palpite[], participantes?: ParticipanteImagem[]): Promise<void> {
   const arquivos = [];
 
   for (const [indice, jogo] of jogos.entries()) {
     const palpitesDoJogo = palpites.filter((palpite) => palpite.jogoId === jogo.id);
-    const imagens = await gerarArquivosTabelaComoImagem(criarTabelaPalpitesDeJogo(jogo, palpitesDoJogo));
+    const imagens = await gerarArquivosTabelaComoImagem(criarTabelaPalpitesDeJogo(jogo, palpitesDoJogo, participantes));
     const prefixo = String(indice + 1).padStart(2, "0");
     arquivos.push(...imagens.map((imagem) => ({ ...imagem, nome: `${prefixo}-${imagem.nome}` })));
   }
