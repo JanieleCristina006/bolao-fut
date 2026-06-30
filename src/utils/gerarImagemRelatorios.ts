@@ -98,7 +98,7 @@ export function gerarImagemParticipante(participante: ParticipanteDetalhe, jogos
         palpite ? PONTUACAO_LABELS[palpite.tipo] : "Sem palpite"
       ];
     }),
-    tonsLinhas: jogos.map((jogo) => tomDoPalpite(participante.palpites.find((item) => item.jogoId === jogo.id))),
+    tonsLinhas: jogos.map((jogo) => tomDoPalpite(participante.palpites.find((item) => item.jogoId === jogo.id), jogo)),
     nomeArquivo: `relatorio-${nomeSeguro(participante.nome)}`
   });
 }
@@ -140,7 +140,7 @@ export function gerarImagemPalpitesParticipante(nome: string, jogos: Jogo[], pal
       ];
     }),
     tonsLinhas: jogos.map((jogo) =>
-      tomDoPalpite(palpites.find((item) => item.jogoId === jogo.id && item.participante === nome))
+      tomDoPalpite(palpites.find((item) => item.jogoId === jogo.id && item.participante === nome), jogo)
     ),
     nomeArquivo: `palpites-${nomeSeguro(nome)}`
   });

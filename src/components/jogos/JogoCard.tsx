@@ -32,8 +32,8 @@ interface JogoCardProps {
 function tonePorTipo(tipo: PontuacaoTipo) {
   if (tipo === "exato") return "green";
   if (tipo === "vencedor") return "blue";
-  if (tipo === "empate") return "yellow";
-  if (tipo === "classificado") return "yellow";
+  if (tipo === "empate") return "blue";
+  if (tipo === "classificado") return "blue";
   if (tipo === "erro") return "red";
   return "gray";
 }
@@ -42,9 +42,9 @@ function rowClass(tipo: PontuacaoTipo) {
   return {
     exato: "border-emerald-200 bg-emerald-50 max-lg:border-white/15 max-lg:bg-zinc-100/10",
     vencedor: "border-blue-200 bg-blue-50 max-lg:border-cyan-300/30 max-lg:bg-cyan-300/10",
-    empate: "border-amber-200 bg-amber-50 max-lg:border-amber-300/35 max-lg:bg-amber-300/10",
-    classificado: "border-yellow-200 bg-yellow-50 max-lg:border-yellow-300/35 max-lg:bg-yellow-300/10",
-    erro: "border-slate-200 bg-slate-50 max-lg:border-white/10 max-lg:bg-white/5",
+    empate: "border-blue-200 bg-blue-50 max-lg:border-cyan-300/30 max-lg:bg-cyan-300/10",
+    classificado: "border-blue-200 bg-blue-50 max-lg:border-cyan-300/30 max-lg:bg-cyan-300/10",
+    erro: "border-red-200 bg-red-50 max-lg:border-red-300/35 max-lg:bg-red-300/10",
     pendente: "border-slate-200 bg-slate-100 max-lg:border-white/10 max-lg:bg-white/[0.08]"
   }[tipo];
 }

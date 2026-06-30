@@ -20,22 +20,31 @@ export interface ArquivoImagem {
 
 interface LinhaImagem {
   celulas: string[];
-  tom?: "verde" | "azul" | "vermelho" | "neutro";
+  tom?: TomLinha;
 }
 
 interface LinhaPalpiteImagem {
   participante: string;
   palpite?: Palpite;
   naoEnviou: boolean;
-  tom: "verde" | "azul" | "vermelho" | "neutro";
+  tom: TomLinha;
 }
 
 const NAO_ENVIOU = "-";
+type TomLinha = "verde" | "azul" | "vermelho" | "neutro";
 
-export function tomDoPalpite(palpite: Palpite | undefined): "verde" | "azul" | "vermelho" | "neutro" {
-  if (palpite?.tipo === "exato") return "verde";
-  if (palpite?.tipo === "vencedor" || palpite?.tipo === "empate" || palpite?.tipo === "classificado") return "azul";
-  if (palpite?.tipo === "erro") return "vermelho";
+function jogoFinalizado(jogo?: Pick<Jogo, "resultado" | "status">): boolean {
+  return Boolean(jogo?.resultado) || jogo?.status === "finalizado";
+}
+
+export function tomDoPalpite(palpite: Palpite | undefined, jogo?: Pick<Jogo, "resultado" | "status">): TomLinha {
+  if (!palpite) return "neutro";
+
+  const tipo = palpite.tipo as Palpite["tipo"] | undefined;
+  if (tipo === "exato" || palpite.cravada) return "verde";
+  if (tipo === "vencedor" || tipo === "empate" || tipo === "classificado") return "azul";
+  if (palpite.classificadoCorreto || Number(palpite.bonusClassificado || 0) > 0 || Number(palpite.pontos || 0) > 0) return "azul";
+  if (tipo === "erro" || (jogoFinalizado(jogo) && Boolean(palpite.palpite || palpite.classificado))) return "vermelho";
   return "neutro";
 }
 
@@ -301,7 +310,11 @@ export function baixarTabelaComoImagem(tabela: TabelaImagem): void {
   void executarDownloadImagem(tabela);
 }
 
-function criarLinhasPalpitesImagem(palpites: Palpite[], participantes?: ParticipanteImagem[]): LinhaPalpiteImagem[] {
+function criarLinhasPalpitesImagem(
+  jogo: Jogo,
+  palpites: Palpite[],
+  participantes?: ParticipanteImagem[]
+): LinhaPalpiteImagem[] {
   const ordemDosTons = { verde: 0, azul: 1, vermelho: 2, neutro: 3 } as const;
   const palpitesPorParticipante = new Map(palpites.map((palpite) => [normalizarTexto(palpite.participante), palpite]));
   const usados = new Set<string>();
@@ -315,7 +328,7 @@ function criarLinhasPalpitesImagem(palpites: Palpite[], participantes?: Particip
       participante: participante.nome,
       palpite,
       naoEnviou: !palpite,
-      tom: tomDoPalpite(palpite)
+      tom: tomDoPalpite(palpite, jogo)
     });
   });
 
@@ -326,7 +339,7 @@ function criarLinhasPalpitesImagem(palpites: Palpite[], participantes?: Particip
       participante: palpite.participante,
       palpite,
       naoEnviou: false,
-      tom: tomDoPalpite(palpite)
+      tom: tomDoPalpite(palpite, jogo)
     });
   });
 
@@ -337,7 +350,7 @@ function criarLinhasPalpitesImagem(palpites: Palpite[], participantes?: Particip
 }
 
 export function criarTabelaPalpitesDeJogo(jogo: Jogo, palpites: Palpite[], participantes?: ParticipanteImagem[]): TabelaImagem {
-  const linhasPalpites = criarLinhasPalpitesImagem(palpites, participantes);
+  const linhasPalpites = criarLinhasPalpitesImagem(jogo, palpites, participantes);
   const isMataMata = jogo.fase === "mata-mata";
 
   return {
