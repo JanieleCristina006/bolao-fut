@@ -4,7 +4,7 @@
   "version": "1.0.0",
   "type": "module",
   "scripts": {
-    "dev": "vite --host 127.0.0.1 --port 5175 --strictPort",
+    "dev": "vite --host 127.0.0.1 --port 5176 --strictPort",
     "build": "tsc -b && vite build",
     "test": "tsc -p tsconfig.test.json && node .tmp-tests/utils/processarPalpitesWhatsApp.test.js",
     "preview": "vite preview"

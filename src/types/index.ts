@@ -120,6 +120,12 @@ export interface AtualizarPalpitePayload {
   adminToken: string;
 }
 
+export interface AtualizarRankingPontosPayload {
+  participante: string;
+  pontos: number;
+  adminToken: string;
+}
+
 export interface AdicionarParticipantePayload {
   nome: string;
   adminToken: string;

@@ -6,6 +6,7 @@ import type {
   ApiMessage,
   AtualizarPagamentoPayload,
   AtualizarPalpitePayload,
+  AtualizarRankingPontosPayload,
   AtualizarResultadoPayload,
   DashboardData,
   Jogo,
@@ -329,6 +330,8 @@ export const api = {
     post<ApiMessage>({ action: "atualizarResultado", ...payload }),
   atualizarPalpite: (payload: AtualizarPalpitePayload) =>
     post<ApiMessage>({ action: "atualizarPalpite", ...payload }),
+  atualizarRankingPontos: (payload: AtualizarRankingPontosPayload) =>
+    post<ApiMessage>({ action: "atualizarRankingPontos", ...payload }),
   adicionarParticipante,
   removerParticipante,
   importarPalpitesEmLote: async (payload: ImportarPalpitesEmLotePayload) => {

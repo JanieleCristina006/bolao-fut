@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { Download, Printer, RefreshCw, RotateCcw } from "lucide-react";
 import { useSearchParams } from "react-router-dom";
+import { useAuth } from "../auth/AuthContext";
 import { RankingTable } from "../components/ranking/RankingTable";
 import { Button } from "../components/ui/Button";
 import { EmptyState } from "../components/ui/EmptyState";
@@ -9,9 +10,11 @@ import { Input } from "../components/ui/Input";
 import { LoadingSkeleton } from "../components/ui/LoadingSkeleton";
 import { Pagination } from "../components/ui/Pagination";
 import { Select } from "../components/ui/Select";
+import { useToast } from "../components/ui/Toast";
 import { PAGE_SIZE } from "../constants";
 import { useDebounce } from "../hooks/useDebounce";
 import { useRanking } from "../hooks/useRanking";
+import { api, isAdminWritesEnabled } from "../services/api";
 import type { RankingItem } from "../types";
 import { filtrarRanking } from "../utils/filtros";
 import { normalizarTexto } from "../utils/formatadores";
@@ -31,12 +34,18 @@ function ordenarRanking(lista: RankingItem[], sort: RankingSort): RankingItem[] 
 
 export function Ranking() {
   const { data, isLoading, error, refetch } = useRanking();
+  const { session } = useAuth();
+  const { showToast } = useToast();
   const [searchParams, setSearchParams] = useSearchParams();
   const [busca, setBusca] = useState(searchParams.get("busca") ?? "");
   const [faixa, setFaixa] = useState(searchParams.get("faixa") ?? "todos");
   const [sort, setSort] = useState<RankingSort>((searchParams.get("sort") as RankingSort) ?? "posicao");
   const [page, setPage] = useState(Number(searchParams.get("page") ?? "1"));
+  const [savingPointsParticipant, setSavingPointsParticipant] = useState<string | null>(null);
   const buscaDebounced = useDebounce(busca);
+  const adminToken =
+    session?.role === "admin" ? session.adminToken : window.sessionStorage.getItem("bolao-admin-token") ?? "";
+  const canEditPoints = Boolean(adminToken) && isAdminWritesEnabled();
 
   useEffect(() => {
     const params = new URLSearchParams();
@@ -55,6 +64,39 @@ export function Ranking() {
   useEffect(() => {
     setPage(1);
   }, [buscaDebounced, faixa, sort]);
+
+  async function editarPontos(item: RankingItem) {
+    if (!adminToken) {
+      showToast("Informe o token administrativo.");
+      return;
+    }
+
+    const resposta = window.prompt(`Novo total de pontos para ${item.participante}:`, String(item.pontos));
+    if (resposta === null) return;
+
+    const pontos = Number(resposta.trim().replace(",", "."));
+    if (!Number.isInteger(pontos) || pontos < 0 || pontos > 9999) {
+      showToast("Informe um total de pontos inteiro entre 0 e 9999.");
+      return;
+    }
+    if (pontos === item.pontos) return;
+    if (!window.confirm(`Salvar ${pontos} pontos para ${item.participante}?`)) return;
+
+    setSavingPointsParticipant(item.participante);
+    try {
+      const respostaApi = await api.atualizarRankingPontos({
+        participante: item.participante,
+        pontos,
+        adminToken
+      });
+      showToast(respostaApi.message);
+      await refetch();
+    } catch (err) {
+      showToast(err instanceof Error ? err.message : "Nao foi possivel editar os pontos.");
+    } finally {
+      setSavingPointsParticipant(null);
+    }
+  }
 
   if (isLoading) return <LoadingSkeleton rows={8} />;
   if (error || !data) return <ErrorState message={error ?? "Ranking indisponível."} onRetry={refetch} />;
@@ -112,7 +154,17 @@ export function Ranking() {
         </Button>
       </div>
 
-      {paginaAtual.length === 0 ? <EmptyState /> : <RankingTable ranking={paginaAtual} destaque={destaque} />}
+      {paginaAtual.length === 0 ? (
+        <EmptyState />
+      ) : (
+        <RankingTable
+          ranking={paginaAtual}
+          destaque={destaque}
+          canEditPoints={canEditPoints}
+          savingParticipant={savingPointsParticipant}
+          onEditPoints={(item) => void editarPontos(item)}
+        />
+      )}
       <Pagination page={page} totalPages={totalPages} onPageChange={setPage} />
     </div>
   );

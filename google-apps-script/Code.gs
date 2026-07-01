@@ -104,6 +104,11 @@ function doPost(e) {
       return json_({ ok: true, message: "Palpite atualizado com sucesso." });
     }
 
+    if (action === "atualizarRankingPontos") {
+      atualizarRankingPontos_(payload);
+      return json_({ ok: true, message: "Pontos do ranking atualizados com sucesso." });
+    }
+
     if (action === "importarPalpitesEmLote") {
       return json_(importarPalpitesEmLote_(payload));
     }
@@ -318,6 +323,7 @@ function readRanking_(ss) {
   var posicaoCol = participantCols.length > 1 ? -1 : findColumn_(headers, ["posicao", "rank"]);
   var pontosCol = findColumnAfter_(headers, ["pontos", "total"], participanteCol + 1);
   var cravadasCol = findColumnAfter_(headers, ["cravadas", "placares", "exatos"], participanteCol + 1);
+  var ajusteCol = participantCols.length > 1 ? findColumnAfter_(headers, ["ajuste manual", "ajuste"], participanteCol + 1) : -1;
   var palpitesCol = findColumnAfter_(headers, ["palpites", "quantidade"], participanteCol + 1);
 
   if (participanteCol < 0 || pontosCol < 0) return [];
@@ -332,7 +338,7 @@ function readRanking_(ss) {
       return {
         posicao: posicaoCol >= 0 && toNumber_(row[posicaoCol]) > 0 ? toNumber_(row[posicaoCol]) : 0,
         participante: participante,
-        pontos: toNumber_(row[pontosCol]),
+        pontos: Math.max(0, toNumber_(row[pontosCol]) + (ajusteCol >= 0 ? toNumber_(row[ajusteCol]) : 0)),
         cravadas: cravadasCol >= 0 ? toNumber_(row[cravadasCol]) : 0,
         palpites: palpitesCol >= 0 ? toNumber_(row[palpitesCol]) : 0,
         acertos: 0,
@@ -1552,6 +1558,38 @@ function recalcularPontuacaoPlanilha_(ss, options) {
   SpreadsheetApp.flush();
 }
 
+function rankingBaseRowCount_(values, firstRow, participantCol) {
+  var rowCount = 0;
+  for (var row = firstRow; row < values.length; row += 1) {
+    var participante = normalizarNome_(values[row][participantCol]);
+    if (!participante) break;
+    rowCount += 1;
+  }
+  return rowCount;
+}
+
+function ensureRankingManualAdjustmentColumn_(sheet, headerInfo, participantCol) {
+  var adjustmentCol = findColumnAfter_(headerInfo.headers, ["ajuste manual", "ajuste"], participantCol + 1);
+  if (adjustmentCol >= 0) return adjustmentCol;
+
+  var cravadasCol = findColumnAfter_(headerInfo.headers, ["cravadas", "placares", "exatos"], participantCol + 1);
+  if (cravadasCol < 0) throw new Error("Coluna de cravadas do Ranking nao encontrada.");
+
+  var values = sheet.getDataRange().getValues();
+  var rowCount = rankingBaseRowCount_(values, headerInfo.row + 1, participantCol);
+  sheet.insertColumnAfter(cravadasCol + 1);
+
+  var newCol = cravadasCol + 2;
+  sheet.getRange(headerInfo.row + 1, newCol).setValue("Ajuste manual");
+  if (rowCount) {
+    var zeros = [];
+    for (var index = 0; index < rowCount; index += 1) zeros.push([0]);
+    sheet.getRange(headerInfo.row + 2, newCol, rowCount, 1).setValues(zeros);
+  }
+  SpreadsheetApp.flush();
+  return newCol - 1;
+}
+
 function atualizarBaseRanking_(ss, totais) {
   var sheet = findSheet_(ss, SHEET_NAMES.ranking, true);
   var values = sheet.getDataRange().getValues();
@@ -1567,6 +1605,7 @@ function atualizarBaseRanking_(ss, totais) {
   var participantCol = participantCols[participantCols.length - 1];
   var pointsCol = findColumnAfter_(headerInfo.headers, ["pontos", "total"], participantCol + 1);
   var cravadasCol = findColumnAfter_(headerInfo.headers, ["cravadas", "placares", "exatos"], participantCol + 1);
+  var adjustmentCol = findColumnAfter_(headerInfo.headers, ["ajuste manual", "ajuste"], participantCol + 1);
   var orderCol = findColumnAfter_(headerInfo.headers, ["ordem"], participantCol + 1);
   if (pointsCol < 0 || cravadasCol < 0 || orderCol < 0) {
     throw new Error("Colunas de cálculo do Ranking não encontradas.");
@@ -1582,9 +1621,11 @@ function atualizarBaseRanking_(ss, totais) {
     var participante = normalizarNome_(values[row][participantCol]);
     if (!participante) break;
     var total = totais[normalizarTexto_(participante)] || { pontos: 0, cravadas: 0 };
+    var ajuste = adjustmentCol >= 0 ? toNumber_(values[row][adjustmentCol]) : 0;
+    var pontosFinais = Math.max(0, Number(total.pontos || 0) + ajuste);
     points.push([total.pontos]);
     cravadas.push([total.cravadas]);
-    orders.push([total.pontos * 100000 + total.cravadas * 100 + (100 - rowCount)]);
+    orders.push([pontosFinais * 100000 + total.cravadas * 100 + (100 - rowCount)]);
     rowCount += 1;
   }
 
@@ -1610,6 +1651,7 @@ function adicionarParticipanteNoRanking_(sheet, participante) {
   var sourceParticipantCol = participantCols[participantCols.length - 1];
   var sourcePointsCol = findColumnAfter_(headers, ["pontos", "total"], sourceParticipantCol + 1);
   var sourceCravadasCol = findColumnAfter_(headers, ["cravadas", "placares", "exatos"], sourceParticipantCol + 1);
+  var sourceAdjustmentCol = findColumnAfter_(headers, ["ajuste manual", "ajuste"], sourceParticipantCol + 1);
   var sourceOrderCol = findColumnAfter_(headers, ["ordem"], sourceParticipantCol + 1);
   if (sourcePointsCol < 0 || sourceCravadasCol < 0 || sourceOrderCol < 0) {
     throw new Error("Colunas-base de pontos, cravadas e ordem não encontradas no Ranking.");
@@ -1645,6 +1687,10 @@ function adicionarParticipanteNoRanking_(sheet, participante) {
   var cravadasRange = sheet.getRange(targetRow, sourceCravadasCol + 1);
   if (!pointsRange.getFormula()) pointsRange.setValue(0);
   if (!cravadasRange.getFormula()) cravadasRange.setValue(0);
+  if (sourceAdjustmentCol >= 0) {
+    var adjustmentRange = sheet.getRange(targetRow, sourceAdjustmentCol + 1);
+    if (!adjustmentRange.getFormula()) adjustmentRange.setValue(0);
+  }
 
   return { adicionado: true, row: targetRow };
 }
@@ -1667,6 +1713,7 @@ function repararRankingSheet_(sheet) {
   var sourceParticipantCol = participantCols[participantCols.length - 1] + 1;
   var sourcePointsCol = findColumnAfter_(headers, ["pontos", "total"], sourceParticipantCol) + 1;
   var sourceCravadasCol = findColumnAfter_(headers, ["cravadas", "placares", "exatos"], sourceParticipantCol) + 1;
+  var sourceAdjustmentCol = findColumnAfter_(headers, ["ajuste manual", "ajuste"], sourceParticipantCol) + 1;
   var sourceOrderCol = findColumnAfter_(headers, ["ordem"], sourceParticipantCol) + 1;
   if (outputPositionCol < 1 || sourcePointsCol < 1 || sourceCravadasCol < 1) {
     throw new Error("Colunas-base do Ranking não encontradas.");
@@ -1677,9 +1724,11 @@ function repararRankingSheet_(sheet) {
   for (var row = firstRow - 1; row < values.length; row += 1) {
     var participante = normalizarNome_(values[row][sourceParticipantCol - 1]);
     if (!participante) break;
+    var pontosBase = toNumber_(values[row][sourcePointsCol - 1]);
+    var ajusteManual = sourceAdjustmentCol > 0 ? toNumber_(values[row][sourceAdjustmentCol - 1]) : 0;
     base.push({
       participante: participante,
-      pontos: toNumber_(values[row][sourcePointsCol - 1]),
+      pontos: Math.max(0, pontosBase + ajusteManual),
       cravadas: toNumber_(values[row][sourceCravadasCol - 1]),
       ordem: sourceOrderCol > 0 ? toNumber_(values[row][sourceOrderCol - 1]) : row
     });
@@ -2222,6 +2271,69 @@ function atualizarPalpite_(payload) {
     }
   }
   recalcularPontuacaoPlanilha_(ss, { formatar: false });
+}
+
+function atualizarRankingPontos_(payload) {
+  var participante = normalizarNome_(payload.participante);
+  var pontos = Number(payload.pontos);
+  if (!participante) throw new Error("Participante obrigatorio.");
+  if (!isFinite(pontos) || Math.floor(pontos) !== pontos || pontos < 0 || pontos > 9999) {
+    throw new Error("Pontos invalidos. Use um inteiro entre 0 e 9999.");
+  }
+
+  var ss = getSpreadsheet_();
+  var sheet = findSheet_(ss, SHEET_NAMES.ranking, true);
+  var values = sheet.getDataRange().getValues();
+  var headerInfo = detectHeader_(values, ["posicao", "participante", "pontos", "cravadas"]);
+  if (!headerInfo) throw new Error("Cabecalho do Ranking nao encontrado.");
+
+  var participantCols = [];
+  headerInfo.headers.forEach(function (header, index) {
+    if (header === "participante" || header === "nome") participantCols.push(index);
+  });
+  if (participantCols.length < 2) throw new Error("Base interna do Ranking nao encontrada.");
+
+  var sourceParticipantCol = participantCols[participantCols.length - 1];
+  ensureRankingManualAdjustmentColumn_(sheet, headerInfo, sourceParticipantCol);
+
+  values = sheet.getDataRange().getValues();
+  headerInfo = detectHeader_(values, ["posicao", "participante", "pontos", "cravadas"]);
+  if (!headerInfo) throw new Error("Cabecalho do Ranking nao encontrado.");
+
+  var headers = headerInfo.headers;
+  participantCols = [];
+  headers.forEach(function (header, index) {
+    if (header === "participante" || header === "nome") participantCols.push(index);
+  });
+  sourceParticipantCol = participantCols[participantCols.length - 1];
+  var sourcePointsCol = findColumnAfter_(headers, ["pontos", "total"], sourceParticipantCol + 1);
+  var sourceCravadasCol = findColumnAfter_(headers, ["cravadas", "placares", "exatos"], sourceParticipantCol + 1);
+  var sourceAdjustmentCol = findColumnAfter_(headers, ["ajuste manual", "ajuste"], sourceParticipantCol + 1);
+  if (sourcePointsCol < 0 || sourceCravadasCol < 0 || sourceAdjustmentCol < 0) {
+    throw new Error("Colunas-base do Ranking nao encontradas.");
+  }
+
+  var dataStart = headerInfo.row + 1;
+  var targetRowIndex = -1;
+  var participanteKey = normalizarTexto_(participante);
+  for (var row = dataStart; row < values.length; row += 1) {
+    var nome = normalizarNome_(values[row][sourceParticipantCol]);
+    if (!nome) break;
+    if (normalizarTexto_(nome) === participanteKey) {
+      targetRowIndex = row;
+      break;
+    }
+  }
+  if (targetRowIndex < 0) throw new Error("Participante nao encontrado na base do Ranking.");
+
+  var pontosAtuais = toNumber_(values[targetRowIndex][sourcePointsCol]);
+  var novoAjuste = pontos - pontosAtuais;
+  var targetRow = targetRowIndex + 1;
+
+  setCellValueSafe_(sheet, targetRow, sourceAdjustmentCol + 1, novoAjuste);
+  SpreadsheetApp.flush();
+  repararRankingSheet_(sheet);
+  SpreadsheetApp.flush();
 }
 
 function parsePostPayload_(e) {
